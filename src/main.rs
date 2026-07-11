@@ -1,23 +1,22 @@
+mod mpris;
+mod mpv;
+
 use anyhow::Result;
+use mpris::NowPlaying;
+use mpv::MpvController;
 use std::env;
 use std::process::Command;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Track {
     title: String,
     artist: String,
     url: String,
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let query = env::args()
-        .nth(1)
-        .unwrap_or_else(|| "lofi beats".to_string());
-
-    println!("🔍 Searching for: {}", query);
-
-    // Get search results
+fn search(query: &str) -> Result<Vec<Track>> {
     let output = Command::new("yt-dlp")
         .arg("--flat-playlist")
         .arg("--print")
@@ -25,7 +24,7 @@ async fn main() -> Result<()> {
         .arg(format!("ytsearch10:{}", query))
         .output()?;
 
-    let results: Vec<Track> = String::from_utf8_lossy(&output.stdout)
+    Ok(String::from_utf8_lossy(&output.stdout)
         .lines()
         .filter_map(|line| {
             let parts: Vec<&str> = line.split('\t').collect();
@@ -39,29 +38,45 @@ async fn main() -> Result<()> {
                 None
             }
         })
-        .collect();
+        .collect())
+}
+
+// `mpris_server::Player` is Rc-based (not `Send`), so we need a
+// single-threaded runtime and a `LocalSet` to host it and anything that
+// touches it (see src/mpris.rs).
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<()> {
+    let local = tokio::task::LocalSet::new();
+    local.run_until(run()).await
+}
+
+async fn run() -> Result<()> {
+    tracing_subscriber::fmt::init();
+
+    let query = env::args()
+        .nth(1)
+        .unwrap_or_else(|| "lofi beats".to_string());
+
+    println!("🔍 Searching for: {}", query);
+    let results = search(&query)?;
 
     if results.is_empty() {
         println!("No results found.");
         return Ok(());
     }
 
-    // Show results
     println!("\n🎵 Search Results:");
     for (i, track) in results.iter().enumerate() {
         println!("{:2}. {} — {}", i + 1, track.title, track.artist);
     }
 
-    // Let user choose
     println!("\nEnter number to play (or q to quit): ");
     let mut input = String::new();
     std::io::stdin().read_line(&mut input)?;
-
     let choice = input.trim();
     if choice.eq_ignore_ascii_case("q") {
         return Ok(());
     }
-
     let index: usize = match choice.parse::<usize>() {
         Ok(n) if n > 0 && n <= results.len() => n - 1,
         _ => {
@@ -69,18 +84,29 @@ async fn main() -> Result<()> {
             0
         }
     };
+    let track = results[index].clone();
 
-    let track = &results[index];
+    // Long-lived mpv instance, controlled over its IPC socket instead of a
+    // one-shot blocking `Command::status()` call, so MPRIS can talk to it.
+    let socket_path = format!("/tmp/melofin-mpv-{}.sock", std::process::id());
+    let mpv = Arc::new(MpvController::spawn(&socket_path).await?);
+
+    let now_playing = Arc::new(Mutex::new(NowPlaying {
+        title: track.title.clone(),
+        artist: track.artist.clone(),
+    }));
+
+    let _player = mpris::start(mpv.clone(), now_playing.clone()).await?;
+
     println!("\n▶️  Now Playing: {} — {}", track.title, track.artist);
+    println!("MPRIS is live — try media keys / `playerctl status`.");
+    mpv.load(&track.url).await?;
 
-    // Play with mpv
-    Command::new("mpv")
-        .arg("--no-video")
-        .arg("--force-window=no")
-        .arg(&track.url)
-        .status()?;
-
-    println!("Playback finished.");
+    // Keep the process (and the MPRIS server / mpv instance) alive.
+    // Ctrl+C to quit for now; a real queue/UI loop replaces this in Step 4/5.
+    tokio::signal::ctrl_c().await?;
+    println!("\nShutting down…");
+    mpv.quit().await?;
 
     Ok(())
 }
