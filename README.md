@@ -76,7 +76,7 @@ The project follows an incremental build plan:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/melofin.git
+git clone https://github.com/sejarparvez/melofin.git
 cd melofin
 
 # Build the project
@@ -146,7 +146,7 @@ This project is in early development. Contributions are welcome once the core ar
 
 ## License
 
-[Choose a license — MIT, GPL-3.0, etc.]
+GPL-3.0-or-later — see [LICENSE](LICENSE).
 
 ## Acknowledgments
 

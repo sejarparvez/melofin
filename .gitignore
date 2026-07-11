@@ -1,4 +1,6 @@
 /target
 Cargo.lock
+.env
 rustypipe_cache.json
-rustypipe_reports
+rustypipe_reports/
+bg_snapshot.bin

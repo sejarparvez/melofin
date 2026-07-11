@@ -2,11 +2,25 @@
 name = "melofin"
 version = "0.1.0"
 edition = "2024"
+description = "A native desktop YouTube Music client for Linux/Hyprland"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/sejarparvez/melofin"
+default-run = "melofin"
+
+[[bin]]
+name = "melofin"
+path = "src/main.rs"
+
+[[bin]]
+name = "search-test"
+path = "src/bin/search_test.rs"
 
 [dependencies]
-rustypipe = "0.11"
 tokio = { version = "1", features = ["full"] }
 anyhow = "1"
+
+# Config
+dotenvy = "0.15"
 
 # Playback — mpv subprocess controlled over its JSON IPC socket
 serde = { version = "1", features = ["derive"] }

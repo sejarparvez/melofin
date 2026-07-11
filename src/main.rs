@@ -1,45 +1,10 @@
-mod mpris;
-mod mpv;
-
 use anyhow::Result;
-use mpris::NowPlaying;
-use mpv::MpvController;
+use melofin::mpris::{self, NowPlaying};
+use melofin::mpv::MpvController;
+use melofin::search::search;
 use std::env;
-use std::process::Command;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-
-#[derive(Debug, Clone)]
-struct Track {
-    title: String,
-    artist: String,
-    url: String,
-}
-
-fn search(query: &str) -> Result<Vec<Track>> {
-    let output = Command::new("yt-dlp")
-        .arg("--flat-playlist")
-        .arg("--print")
-        .arg("%(title)s\t%(uploader)s\t%(webpage_url)s")
-        .arg(format!("ytsearch10:{}", query))
-        .output()?;
-
-    Ok(String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .filter_map(|line| {
-            let parts: Vec<&str> = line.split('\t').collect();
-            if parts.len() >= 3 {
-                Some(Track {
-                    title: parts[0].to_string(),
-                    artist: parts[1].to_string(),
-                    url: parts[2].to_string(),
-                })
-            } else {
-                None
-            }
-        })
-        .collect())
-}
 
 // `mpris_server::Player` is Rc-based (not `Send`), so we need a
 // single-threaded runtime and a `LocalSet` to host it and anything that
@@ -51,6 +16,7 @@ async fn main() -> Result<()> {
 }
 
 async fn run() -> Result<()> {
+    dotenvy::dotenv().ok(); // fine if .env doesn't exist; env vars still work
     tracing_subscriber::fmt::init();
 
     let query = env::args()
