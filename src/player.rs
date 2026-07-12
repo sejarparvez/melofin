@@ -25,6 +25,10 @@ pub struct PlayerState {
     pub paused: bool,
     pub position_seconds: f64,
     pub duration_seconds: f64,
+    /// URL of the current track's thumbnail, or empty if it doesn't have
+    /// one. Kept here rather than threaded through `mpris::NowPlaying`
+    /// since this only needs to reach our own UI, not MPRIS metadata.
+    pub thumbnail_url: String,
 }
 
 pub struct PlayerHandle {
@@ -74,6 +78,12 @@ async fn run(
         }
     };
 
+    // Mirrors `now_playing.title`/`.artist` but isn't part of
+    // `mpris::NowPlaying` — MPRIS metadata doesn't need it (yet; see
+    // PlayerState::thumbnail_url doc comment), so it's tracked separately
+    // here instead of widening that struct's contract.
+    let mut current_thumbnail_url = String::new();
+
     // Drives the player bar's seek scale/time labels. Kept separate from
     // mpris.rs's own 500ms poll loop (that one updates MPRIS metadata for
     // external tools like waybar; this one updates our own UI) — the two
@@ -91,6 +101,7 @@ async fn run(
                             title: track.title.clone(),
                             artist: track.artist.clone(),
                         };
+                        current_thumbnail_url = track.thumbnail_url.clone();
                         if let Err(e) = mpv.load(&track.url).await {
                             tracing::warn!("mpv load failed: {e}");
                             continue;
@@ -102,6 +113,7 @@ async fn run(
                                 paused: false,
                                 position_seconds: 0.0,
                                 duration_seconds: 0.0,
+                                thumbnail_url: current_thumbnail_url.clone(),
                             })
                             .await;
                     }
@@ -137,6 +149,7 @@ async fn run(
                         paused,
                         position_seconds: position,
                         duration_seconds: duration,
+                        thumbnail_url: current_thumbnail_url.clone(),
                     })
                     .await;
             }

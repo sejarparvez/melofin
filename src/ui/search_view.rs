@@ -4,6 +4,7 @@
 //! to it.
 
 use crate::search::{Track, search};
+use crate::ui::thumbnail_widget;
 use adw::prelude::*;
 use gtk::glib;
 use std::cell::RefCell;
@@ -79,6 +80,19 @@ impl SearchView {
                             // used as a static row elsewhere in GTK/Adwaita
                             // apps), so row-activated never fires without this.
                             row.set_activatable(true);
+
+                            let thumbnail = gtk::Picture::new();
+                            thumbnail.set_size_request(40, 40);
+                            thumbnail.set_content_fit(gtk::ContentFit::Cover);
+                            row.add_prefix(&thumbnail);
+                            if !track.thumbnail_url.is_empty() {
+                                thumbnail_widget::spawn_fetch(
+                                    track.thumbnail_url.clone(),
+                                    40,
+                                    move |texture| thumbnail.set_paintable(Some(&texture)),
+                                );
+                            }
+
                             list.append(&row);
                         }
                         *tracks_slot.borrow_mut() = tracks;

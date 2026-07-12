@@ -15,9 +15,10 @@
 //! or tokio directly, same separation as `search_view.rs`.
 
 use crate::player::{PlayerCommand, PlayerState};
+use crate::ui::thumbnail_widget;
 use adw::prelude::*;
 use gtk::glib;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 /// Tooltip suffix for every button that's laid out but not wired up yet, so
@@ -37,6 +38,13 @@ pub struct PlayerBar {
     /// writing to `seek_scale` while this is set, so an incoming poll tick
     /// (every ~500ms) can't yank the handle back mid-drag.
     seeking: Rc<Cell<bool>>,
+    art_stack: gtk::Stack,
+    art_picture: gtk::Picture,
+    /// Thumbnail URL the art tile currently shows (or was last asked to
+    /// fetch), so `update()` — called on every ~500ms poll tick — only
+    /// kicks off a new fetch when the track actually changes, not on every
+    /// tick.
+    current_thumbnail_url: RefCell<String>,
 }
 
 impl PlayerBar {
@@ -63,18 +71,25 @@ impl PlayerBar {
         // doesn't need the left/right columns to match widths to keep the
         // center controls actually centered (see note above).
 
-        // No artwork source yet (yt-dlp search only gives us title/artist/
-        // url) — a generic icon holds the layout's place until artwork
-        // fetching exists.
+        // No artwork until a track with a thumbnail_url plays — the stack
+        // starts on the placeholder page and `update()` swaps to the "art"
+        // page once a thumbnail is actually fetched and decoded.
         let art_frame = gtk::Frame::new(None);
         art_frame.add_css_class("card");
-        let art_image = gtk::Image::from_icon_name("audio-x-generic-symbolic");
-        art_image.set_pixel_size(40);
-        art_image.set_margin_top(4);
-        art_image.set_margin_bottom(4);
-        art_image.set_margin_start(4);
-        art_image.set_margin_end(4);
-        art_frame.set_child(Some(&art_image));
+        let art_stack = gtk::Stack::new();
+        art_stack.set_size_request(48, 48);
+
+        let art_placeholder = gtk::Image::from_icon_name("audio-x-generic-symbolic");
+        art_placeholder.set_pixel_size(24);
+        art_stack.add_named(&art_placeholder, Some("placeholder"));
+
+        let art_picture = gtk::Picture::new();
+        art_picture.set_content_fit(gtk::ContentFit::Cover);
+        art_picture.set_size_request(48, 48);
+        art_stack.add_named(&art_picture, Some("art"));
+
+        art_stack.set_visible_child_name("placeholder");
+        art_frame.set_child(Some(&art_stack));
 
         let info_box = gtk::Box::new(gtk::Orientation::Vertical, 2);
         info_box.set_valign(gtk::Align::Center);
@@ -260,6 +275,9 @@ impl PlayerBar {
             remaining_label,
             seek_scale,
             seeking,
+            art_stack,
+            art_picture,
+            current_thumbnail_url: RefCell::new(String::new()),
         }
     }
 
@@ -269,6 +287,20 @@ impl PlayerBar {
     pub fn update(&self, state: &PlayerState) {
         self.title_label.set_label(&state.title);
         self.artist_label.set_label(&state.artist);
+
+        if *self.current_thumbnail_url.borrow() != state.thumbnail_url {
+            *self.current_thumbnail_url.borrow_mut() = state.thumbnail_url.clone();
+            if state.thumbnail_url.is_empty() {
+                self.art_stack.set_visible_child_name("placeholder");
+            } else {
+                let art_stack = self.art_stack.clone();
+                let art_picture = self.art_picture.clone();
+                thumbnail_widget::spawn_fetch(state.thumbnail_url.clone(), 48, move |texture| {
+                    art_picture.set_paintable(Some(&texture));
+                    art_stack.set_visible_child_name("art");
+                });
+            }
+        }
 
         let icon = if state.paused {
             "media-playback-start-symbolic"

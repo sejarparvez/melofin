@@ -2,5 +2,6 @@
 //! bar (`player_bar`) can grow independently of the search/results view.
 pub mod player_bar;
 pub mod search_view;
+pub mod thumbnail_widget;
 pub mod top_bar;
 pub mod window;

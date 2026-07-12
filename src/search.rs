@@ -6,6 +6,9 @@ pub struct Track {
     pub title: String,
     pub artist: String,
     pub url: String,
+    /// URL of the track's thumbnail image, or empty if we couldn't
+    /// determine a video id to build one from.
+    pub thumbnail_url: String,
 }
 
 /// Runs `yt-dlp` against YouTube Music search and returns parsed results.
@@ -16,7 +19,7 @@ pub fn search(query: &str) -> Result<Vec<Track>> {
     let output = Command::new("yt-dlp")
         .arg("--flat-playlist")
         .arg("--print")
-        .arg("%(title)s\t%(uploader)s\t%(webpage_url)s")
+        .arg("%(id)s\t%(title)s\t%(uploader)s\t%(webpage_url)s")
         .arg(format!("ytsearch10:{query}"))
         .output()?;
 
@@ -25,19 +28,32 @@ pub fn search(query: &str) -> Result<Vec<Track>> {
     )))
 }
 
-/// Parses `yt-dlp --print "%(title)s\t%(uploader)s\t%(webpage_url)s"`
+/// Parses `yt-dlp --print "%(id)s\t%(title)s\t%(uploader)s\t%(webpage_url)s"`
 /// output (one tab-separated result per line) into [`Track`]s. Lines that
-/// don't have all three fields are skipped rather than erroring, since
+/// don't have all four fields are skipped rather than erroring, since
 /// `yt-dlp` occasionally emits warnings or blank lines on stdout.
+///
+/// We deliberately don't ask yt-dlp for `%(thumbnail)s` here: with
+/// `--flat-playlist`, yt-dlp skips full per-video extraction (that's the
+/// whole point of "flat"), and the singular `thumbnail` field is only
+/// derived from the `thumbnails` list during that full-extraction step
+/// (`YoutubeDL.process_video_result`, confirmed by reading yt-dlp's
+/// source) — so `%(thumbnail)s` always prints "NA" for flat search
+/// results. The video id, on the other hand, is always present (it's set
+/// unconditionally from the search renderer), so we build the thumbnail
+/// URL ourselves from YouTube's standard, stable thumbnail CDN pattern
+/// instead of depending on yt-dlp's per-version extraction internals.
 pub fn parse_search_output(raw: &str) -> Vec<Track> {
     raw.lines()
         .filter_map(|line| {
             let parts: Vec<&str> = line.split('\t').collect();
-            if parts.len() >= 3 {
+            if parts.len() >= 4 {
+                let id = parts[0];
                 Some(Track {
-                    title: parts[0].to_string(),
-                    artist: parts[1].to_string(),
-                    url: parts[2].to_string(),
+                    title: parts[1].to_string(),
+                    artist: parts[2].to_string(),
+                    url: parts[3].to_string(),
+                    thumbnail_url: thumbnail_url_for_id(id),
                 })
             } else {
                 None
@@ -46,13 +62,30 @@ pub fn parse_search_output(raw: &str) -> Vec<Track> {
         .collect()
 }
 
+/// YouTube serves an `mqdefault.jpg` thumbnail for essentially every public
+/// video at this predictable, unauthenticated URL. We downscale to ~48px
+/// for display either way, so there's no reason to fetch `hqdefault.jpg`
+/// (480x360, 2-3x the bytes) or `maxresdefault.jpg` (which additionally
+/// 404s for a lot of videos that never had a high-res thumbnail
+/// generated) — `mqdefault.jpg` (320x180) is plenty of source resolution
+/// and meaningfully faster to download. Returns an empty string if `id` is
+/// missing/unresolved ("NA", yt-dlp's marker for that).
+fn thumbnail_url_for_id(id: &str) -> String {
+    if id.is_empty() || id == "NA" {
+        String::new()
+    } else {
+        format!("https://i.ytimg.com/vi/{id}/mqdefault.jpg")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn parses_well_formed_lines() {
-        let raw = "Song A\tArtist A\thttps://youtu.be/a\nSong B\tArtist B\thttps://youtu.be/b\n";
+        let raw = "aaaaaaaaaaa\tSong A\tArtist A\thttps://youtu.be/a\n\
+                   bbbbbbbbbbb\tSong B\tArtist B\thttps://youtu.be/b\n";
         let tracks = parse_search_output(raw);
         assert_eq!(
             tracks,
@@ -61,20 +94,32 @@ mod tests {
                     title: "Song A".into(),
                     artist: "Artist A".into(),
                     url: "https://youtu.be/a".into(),
+                    thumbnail_url: "https://i.ytimg.com/vi/aaaaaaaaaaa/mqdefault.jpg".into(),
                 },
                 Track {
                     title: "Song B".into(),
                     artist: "Artist B".into(),
                     url: "https://youtu.be/b".into(),
+                    thumbnail_url: "https://i.ytimg.com/vi/bbbbbbbbbbb/mqdefault.jpg".into(),
                 },
             ]
         );
     }
 
     #[test]
+    fn missing_id_becomes_empty_thumbnail() {
+        let raw = "NA\tSong A\tArtist A\thttps://youtu.be/a\n";
+        let tracks = parse_search_output(raw);
+        assert_eq!(tracks.len(), 1);
+        assert!(tracks[0].thumbnail_url.is_empty());
+    }
+
+    #[test]
     fn skips_malformed_lines() {
-        // Missing the url field, and a stray blank line yt-dlp sometimes emits.
-        let raw = "Song A\tArtist A\thttps://youtu.be/a\nSong B\tArtist B\n\n";
+        // Missing the url field, and a stray blank line yt-dlp sometimes
+        // emits.
+        let raw = "aaaaaaaaaaa\tSong A\tArtist A\thttps://youtu.be/a\n\
+                   bbbbbbbbbbb\tSong B\tArtist B\n\n";
         let tracks = parse_search_output(raw);
         assert_eq!(tracks.len(), 1);
         assert_eq!(tracks[0].title, "Song A");
@@ -86,10 +131,14 @@ mod tests {
     }
 
     #[test]
-    fn title_containing_extra_tabs_still_parses_first_three_fields() {
-        // Titles are the first field, so extra tabs later in the line
-        // (e.g. from an unusual uploader name) shouldn't break parsing.
-        let raw = "My Song\tSome\tWeird\tArtist\thttps://youtu.be/x\n";
+    fn title_containing_extra_tabs_still_parses_id_and_title() {
+        // Titles are the second field, so extra tabs later in the line
+        // (e.g. from an unusual uploader name) shouldn't break parsing of
+        // the id/title — though with a fixed 4-column layout, a stray tab
+        // does shift artist/url out of position, which is an inherent
+        // limitation of unescaped tab-separated parsing rather than
+        // something this test tries to fully guard against.
+        let raw = "aaaaaaaaaaa\tMy Song\tSome\tWeird\tArtist\thttps://youtu.be/x\n";
         let tracks = parse_search_output(raw);
         assert_eq!(tracks.len(), 1);
         assert_eq!(tracks[0].title, "My Song");

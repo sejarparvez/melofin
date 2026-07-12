@@ -33,6 +33,9 @@ serde_json = "1"
 # System integration
 mpris-server = "0.9"
 
+# Thumbnail downloads (search results + player bar album art)
+ureq = "2"
+
 # UI
 # v4_12 pulls in v4_6 (needed for MenuButton::set_child) through v4_12
 # cumulatively. Bump this if you use a newer gtk4-rs feature later.
