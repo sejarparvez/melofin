@@ -12,11 +12,6 @@ use gtk::glib;
 
 const APP_ID: &str = "dev.melofin.Melofin";
 
-/// Names for the two pages in the `gtk::Stack` swapped between Home and
-/// Search — see `build_ui`.
-const PAGE_HOME: &str = "home";
-const PAGE_SEARCH: &str = "search";
-
 pub fn run() -> glib::ExitCode {
     let app = adw::Application::builder().application_id(APP_ID).build();
     app.connect_activate(build_ui);
@@ -60,46 +55,34 @@ fn build_ui(app: &adw::Application) {
     };
 
     let home_view = HomeView::new(play_track.clone());
+
     // The search entry lives in the top bar (`top_bar.search_entry`), not
-    // here — see ui/search_view.rs and ui/top_bar.rs.
+    // here. SearchView no longer has a visible widget of its own — results
+    // now show in a `gtk::Popover` parented to `top_bar.search_entry`
+    // (see ui/search_view.rs), so home stays on screen underneath instead
+    // of being swapped out.
     let search_view = SearchView::new(&top_bar.search_entry, play_track);
+    // Nothing else references search_view directly, but it must stay alive
+    // for the popover and its signal connections to keep working.
+    let _search_view = search_view;
 
     let player_bar = PlayerBar::new(handle.commands.clone());
 
-    // Home is the default page; searching switches to Search (there's no
-    // back button yet — see top_bar.rs — so the Home button is the only
-    // way back for now).
-    let stack = gtk::Stack::new();
-    stack.set_vexpand(true);
-    stack.add_named(&home_view.widget, Some(PAGE_HOME));
-    stack.add_named(&search_view.widget, Some(PAGE_SEARCH));
-    stack.set_visible_child_name(PAGE_HOME);
-
-    {
-        let stack = stack.clone();
-        top_bar.search_entry.connect_activate(move |_| {
-            stack.set_visible_child_name(PAGE_SEARCH);
-        });
-    }
-    {
-        let stack = stack.clone();
-        top_bar.home_button.connect_clicked(move |_| {
-            stack.set_visible_child_name(PAGE_HOME);
-        });
-    }
-
     // Left/right panels are always visible (matching Spotify, which keeps
-    // its library sidebar around across views) rather than toggled per
-    // page — there's only one center page worth hiding them for so far.
+    // its library sidebar around across views).
     let library_sidebar = LibrarySidebar::new();
     let now_playing_panel = NowPlayingPanel::new();
 
     let middle_row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     middle_row.append(&library_sidebar.widget);
     middle_row.append(&gtk::Separator::new(gtk::Orientation::Vertical));
-    middle_row.append(&stack);
+    middle_row.append(&home_view.widget);
     middle_row.append(&gtk::Separator::new(gtk::Orientation::Vertical));
     middle_row.append(&now_playing_panel.widget);
+    middle_row.set_hexpand(true);
+    middle_row.set_vexpand(true);
+    home_view.widget.set_hexpand(true);
+    home_view.widget.set_vexpand(true);
 
     let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
     content.append(&top_bar.root);
