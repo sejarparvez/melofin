@@ -1,16 +1,24 @@
 //! The home page: shown by default until the user searches (see
-//! `window.rs`, which swaps a `gtk::Stack` between this and
-//! `search_view`). Everything here is placeholder data until a real
-//! home-feed API exists (nothing in `search.rs`/yt-dlp currently provides
-//! one) — this is UI scaffolding, same spirit as the disabled buttons in
-//! `top_bar.rs`/`library_sidebar.rs`.
+//! `window.rs`, which keeps this underneath the search popover — see
+//! `search_view.rs`'s doc comment).
 //!
-//! Cards reuse `search::Track` rather than inventing a parallel type, so
-//! swapping placeholder data for a real feed later is just a different
-//! `Vec<Track>` feeding the same `build_row`/`track_card` functions.
+//! Data comes from `home_feed::fetch_home_feed()`, which is *not* a real
+//! personalized YouTube Music feed (that needs InnerTube auth — see
+//! `home_feed.rs`'s doc comment for why), but it's real, live search
+//! results rather than hardcoded data. The fetch runs on a background
+//! thread — same `thread::spawn` + `async_channel` + `spawn_future_local`
+//! pattern as `search_view.rs`'s debounced search — so the page starts in
+//! a loading state and swaps in rows once the feed arrives.
+//!
+//! Cards reuse `search::Track` rather than inventing a parallel type, so a
+//! future real feed just needs to keep producing `Vec<Track>`s to feed the
+//! same `build_row`/`track_card` functions.
 
+use crate::home_feed::HomeFeed;
 use crate::search::Track;
+use crate::ui::thumbnail_widget;
 use adw::prelude::*;
+use gtk::glib;
 
 pub struct HomeView {
     pub widget: gtk::ScrolledWindow,
@@ -29,13 +37,14 @@ impl HomeView {
 
         content.append(&build_filter_pills());
         content.append(&build_shortcuts_grid());
-        content.append(&build_hero_card(on_select.clone()));
-        content.append(&build_row(
-            "Made for you",
-            made_for_you(),
-            on_select.clone(),
-        ));
-        content.append(&build_row("Recently played", recently_played(), on_select));
+
+        // Hero card + rows get built into this once the feed loads; starts
+        // out holding a loading spinner.
+        let feed_container = gtk::Box::new(gtk::Orientation::Vertical, 24);
+        feed_container.append(&loading_state());
+        content.append(&feed_container);
+
+        load_feed(feed_container, on_select);
 
         let widget = gtk::ScrolledWindow::new();
         widget.set_vexpand(true);
@@ -44,6 +53,102 @@ impl HomeView {
 
         Self { widget }
     }
+}
+
+/// Kicks off `home_feed::fetch_home_feed()` on a background thread (it
+/// shells out to `yt-dlp` per row — far too slow for the GTK main thread)
+/// and populates `container` with the result once it lands. Also called
+/// again by the error state's "Retry" button, so it's careful to leave
+/// `container` empty before it starts and fully replace its contents when
+/// done rather than assuming it's only ever called once.
+fn load_feed(container: gtk::Box, on_select: impl Fn(Track) + 'static + Clone) {
+    let (sender, receiver) = async_channel::bounded::<HomeFeed>(1);
+    std::thread::spawn(move || {
+        let _ = sender.send_blocking(crate::home_feed::fetch_home_feed());
+    });
+
+    glib::spawn_future_local(async move {
+        let Ok(feed) = receiver.recv().await else {
+            return;
+        };
+        clear(&container);
+
+        if feed.sections.is_empty() {
+            container.append(&error_state(container.clone(), on_select));
+            return;
+        }
+
+        // The first track of the first row anchors the hero card — not
+        // meaningfully different from any other card in that row, just
+        // given more visual weight, the way a real Quick Picks hero would
+        // be.
+        if let Some(first) = feed.sections[0].tracks.first() {
+            container.append(&build_hero_card(first.clone(), on_select.clone()));
+        }
+
+        for section in feed.sections {
+            container.append(&build_row(
+                &section.title,
+                section.tracks,
+                on_select.clone(),
+            ));
+        }
+    });
+}
+
+fn clear(container: &gtk::Box) {
+    while let Some(child) = container.first_child() {
+        container.remove(&child);
+    }
+}
+
+fn loading_state() -> gtk::Widget {
+    let box_ = gtk::Box::new(gtk::Orientation::Vertical, 12);
+    box_.set_valign(gtk::Align::Center);
+    box_.set_halign(gtk::Align::Center);
+    box_.set_margin_top(60);
+
+    let spinner = gtk::Spinner::new();
+    spinner.set_spinning(true);
+    spinner.set_size_request(32, 32);
+
+    let label = gtk::Label::new(Some("Loading your feed…"));
+    label.add_css_class("dim-label");
+
+    box_.append(&spinner);
+    box_.append(&label);
+    box_.upcast()
+}
+
+/// Shown when every row failed (offline, `yt-dlp` missing/broken, etc.) —
+/// see `home_feed::fetch_home_feed`'s doc comment on why a partial feed
+/// beats an error mid-page, but an *entirely* empty one still needs
+/// something better than a blank page.
+fn error_state(container: gtk::Box, on_select: impl Fn(Track) + 'static + Clone) -> gtk::Widget {
+    let box_ = gtk::Box::new(gtk::Orientation::Vertical, 12);
+    box_.set_valign(gtk::Align::Center);
+    box_.set_halign(gtk::Align::Center);
+    box_.set_margin_top(60);
+
+    let label = gtk::Label::new(Some(
+        "Couldn't load your feed. Check that yt-dlp is installed and you're online.",
+    ));
+    label.add_css_class("dim-label");
+    label.set_wrap(true);
+    label.set_justify(gtk::Justification::Center);
+
+    let retry = gtk::Button::with_label("Retry");
+    retry.add_css_class("pill");
+    retry.set_halign(gtk::Align::Center);
+    retry.connect_clicked(move |_| {
+        clear(&container);
+        container.append(&loading_state());
+        load_feed(container.clone(), on_select.clone());
+    });
+
+    box_.append(&label);
+    box_.append(&retry);
+    box_.upcast()
 }
 
 /// "All / Music" filter row — cosmetic for now (there's only one feed to
@@ -94,7 +199,8 @@ fn shortcuts() -> Vec<Shortcut> {
 /// A 2-wide grid of compact horizontal tiles ("Liked Songs", etc.) — same
 /// not-yet-wired pattern as `library_sidebar.rs` rows: disabled with a
 /// tooltip rather than silently doing nothing, since none of these map to
-/// a real view yet.
+/// a real view yet (they need a library/local-storage layer, not just a
+/// home feed — see `doc/GUIDE.md`'s build order).
 fn build_shortcuts_grid() -> gtk::FlowBox {
     let flow = gtk::FlowBox::new();
     flow.set_selection_mode(gtk::SelectionMode::None);
@@ -141,11 +247,11 @@ fn shortcut_tile(shortcut: &Shortcut) -> gtk::Widget {
     button.upcast()
 }
 
-/// The single big "Picked for you" card. Its play button uses a real
-/// placeholder `Track` (empty `url`), so clicking it is a safe no-op —
-/// `window.rs`'s shared `play_track` closure already ignores those — same
-/// as every other placeholder card on this page.
-fn build_hero_card(on_select: impl Fn(Track) + 'static) -> gtk::Widget {
+/// The single big hero card, anchored to a real track from the first
+/// loaded row (see `load_feed`) — art, title and artist all come from
+/// `track`, and its play button sends the real `track` (with a real
+/// `url`), not a placeholder.
+fn build_hero_card(track: Track, on_select: impl Fn(Track) + 'static) -> gtk::Widget {
     let card = gtk::Box::new(gtk::Orientation::Horizontal, 16);
     card.add_css_class("card");
     card.add_css_class("hero-card");
@@ -159,22 +265,34 @@ fn build_hero_card(on_select: impl Fn(Track) + 'static) -> gtk::Widget {
     icon.set_valign(gtk::Align::Center);
     art.set_child(Some(&icon));
 
+    if !track.thumbnail_url.is_empty() {
+        let picture = gtk::Picture::new();
+        picture.set_content_fit(gtk::ContentFit::Cover);
+        picture.set_size_request(96, 96);
+        art.set_child(Some(&picture));
+        thumbnail_widget::spawn_fetch(track.thumbnail_url.clone(), 96, move |tex| {
+            picture.set_paintable(Some(&tex));
+        });
+    }
+
     let text_box = gtk::Box::new(gtk::Orientation::Vertical, 4);
     text_box.set_valign(gtk::Align::Center);
     text_box.set_hexpand(true);
 
-    let eyebrow = gtk::Label::new(Some("Picked for you"));
+    let eyebrow = gtk::Label::new(Some("Trending now"));
     eyebrow.add_css_class("caption");
     eyebrow.add_css_class("dim-label");
     eyebrow.set_halign(gtk::Align::Start);
 
-    let title = gtk::Label::new(Some("Late Night Mix"));
+    let title = gtk::Label::new(Some(&track.title));
     title.add_css_class("title-2");
     title.set_halign(gtk::Align::Start);
+    title.set_ellipsize(gtk::pango::EllipsizeMode::End);
 
-    let subtitle = gtk::Label::new(Some("Top pick from your recent listens"));
+    let subtitle = gtk::Label::new(Some(&track.artist));
     subtitle.add_css_class("dim-label");
     subtitle.set_halign(gtk::Align::Start);
+    subtitle.set_ellipsize(gtk::pango::EllipsizeMode::End);
 
     text_box.append(&eyebrow);
     text_box.append(&title);
@@ -185,7 +303,7 @@ fn build_hero_card(on_select: impl Fn(Track) + 'static) -> gtk::Widget {
     play_button.add_css_class("suggested-action");
     play_button.set_valign(gtk::Align::Center);
     play_button.connect_clicked(move |_| {
-        on_select(placeholder_track("Late Night Mix", "Melofin picks"));
+        on_select(track.clone());
     });
 
     card.append(&art);
@@ -276,46 +394,4 @@ fn track_card(track: Track, on_select: impl Fn(Track) + 'static) -> gtk::Widget 
     button.connect_clicked(move |_| on_select(track.clone()));
 
     button.upcast()
-}
-
-// ---------------------------------------------------------------------
-// Placeholder data — swap for a real home-feed source when one exists.
-// Empty `thumbnail_url`/`url` are fine: `url` only matters once a card is
-// actually played, and an empty `thumbnail_url` just keeps the icon
-// placeholder instead of fetching art.
-// ---------------------------------------------------------------------
-
-fn made_for_you() -> Vec<Track> {
-    [
-        ("Chill Waves", "Lo-fi & chill"),
-        ("Focus Flow", "Deep work beats"),
-        ("Late Night Drive", "Synthwave vibes"),
-        ("Morning Boost", "Upbeat energy"),
-        ("Rainy Days", "Soft acoustic"),
-    ]
-    .into_iter()
-    .map(|(title, subtitle)| placeholder_track(title, subtitle))
-    .collect()
-}
-
-fn recently_played() -> Vec<Track> {
-    [
-        ("After Hours", "The Weeknd"),
-        ("Currents", "Tame Impala"),
-        ("Blonde", "Frank Ocean"),
-        ("Melodrama", "Lorde"),
-        ("Random Access Memories", "Daft Punk"),
-    ]
-    .into_iter()
-    .map(|(title, artist)| placeholder_track(title, artist))
-    .collect()
-}
-
-fn placeholder_track(title: &str, artist: &str) -> Track {
-    Track {
-        title: title.to_string(),
-        artist: artist.to_string(),
-        url: String::new(),
-        thumbnail_url: String::new(),
-    }
 }

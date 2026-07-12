@@ -1,3 +1,4 @@
+pub mod home_feed;
 pub mod mpris;
 pub mod mpv;
 pub mod player;
