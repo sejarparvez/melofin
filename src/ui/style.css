@@ -44,3 +44,11 @@ window {
 .hero-card {
     background: linear-gradient(135deg, #4a2f6b, #1e1a3c);
 }
+
+.library-chip {
+    min-height: 20px;
+    min-width: 0;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+}

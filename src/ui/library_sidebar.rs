@@ -52,7 +52,11 @@ fn dummy_library() -> Vec<LibraryItem> {
 pub struct LibrarySidebar {
     pub widget: gtk::Box,
 }
-
+impl Default for LibrarySidebar {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl LibrarySidebar {
     pub fn new() -> Self {
         let widget = gtk::Box::new(gtk::Orientation::Vertical, 10);
@@ -85,6 +89,7 @@ impl LibrarySidebar {
         for label in ["Playlists", "Albums", "Artists"] {
             let chip = gtk::ToggleButton::with_label(label);
             chip.add_css_class("pill");
+            chip.add_css_class("library-chip");
             chip.set_sensitive(false);
             chip.set_tooltip_text(Some(NO_BACKEND_YET));
             chips.append(&chip);
