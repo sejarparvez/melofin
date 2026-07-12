@@ -17,3 +17,30 @@ window {
 .top-bar-search:focus-within {
     background-color: #3a3a3a;
 }
+
+.home-art {
+    background-color: #2a2a2a;
+    border-radius: 8px;
+}
+
+.home-card {
+    padding: 8px;
+    border-radius: 10px;
+}
+
+.home-card:hover {
+    background-color: alpha(#ffffff, 0.06);
+}
+
+.home-card:hover .home-art {
+    background-color: #3a3a3a;
+}
+
+.sidebar {
+    background-color: #0a0a0a;
+    border-radius: 8px;
+}
+
+.hero-card {
+    background: linear-gradient(135deg, #4a2f6b, #1e1a3c);
+}

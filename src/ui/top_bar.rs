@@ -13,6 +13,7 @@ use gtk::gio;
 pub struct TopBar {
     pub root: gtk::Box,
     pub search_entry: gtk::SearchEntry,
+    pub home_button: gtk::Button,
 }
 
 pub fn build_top_bar() -> TopBar {
@@ -34,19 +35,22 @@ pub fn build_top_bar() -> TopBar {
     TopBar {
         root,
         search_entry: center.search_entry,
+        home_button: left.home_button,
     }
 }
 
 struct LeftCluster {
     root: gtk::Box,
+    home_button: gtk::Button,
 }
 
 /// Overflow menu, back, forward, home.
 ///
-/// Back/forward/home are disabled until there's an actual view stack
-/// (currently the app has exactly one view: search results). The overflow
-/// menu is live from day one since it's the only way to quit without a
-/// titlebar close button.
+/// Back/forward stay disabled until there's real view-stack history to
+/// traverse (currently the app just toggles between two views: home and
+/// search — see `window.rs`). Home is live since that toggle exists now.
+/// The overflow menu is live from day one since it's the only way to quit
+/// without a titlebar close button.
 fn build_left_cluster() -> LeftCluster {
     let root = gtk::Box::new(gtk::Orientation::Horizontal, 4);
 
@@ -73,14 +77,13 @@ fn build_left_cluster() -> LeftCluster {
     home_button.add_css_class("flat");
     home_button.add_css_class("circular");
     home_button.set_tooltip_text(Some("Home"));
-    home_button.set_sensitive(false); // TODO: enable once a Home view exists
 
     root.append(&menu_button);
     root.append(&back_button);
     root.append(&forward_button);
     root.append(&home_button);
 
-    LeftCluster { root }
+    LeftCluster { root, home_button }
 }
 
 struct CenterCluster {
