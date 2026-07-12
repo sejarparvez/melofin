@@ -94,7 +94,11 @@ impl LibrarySidebar {
             chip.set_tooltip_text(Some(NO_BACKEND_YET));
             chips.append(&chip);
         }
-        widget.append(&chips);
+        let chips_scroller = gtk::ScrolledWindow::new();
+        chips_scroller.set_vscrollbar_policy(gtk::PolicyType::Never);
+        chips_scroller.set_hscrollbar_policy(gtk::PolicyType::External);
+        chips_scroller.set_child(Some(&chips));
+        widget.append(&chips_scroller);
 
         let rows = gtk::Box::new(gtk::Orientation::Vertical, 2);
         for item in dummy_library() {
@@ -106,7 +110,7 @@ impl LibrarySidebar {
         scroller.set_vexpand(true);
         scroller.set_child(Some(&rows));
         widget.append(&scroller);
-
+        widget.set_hexpand(false);
         Self { widget }
     }
 }

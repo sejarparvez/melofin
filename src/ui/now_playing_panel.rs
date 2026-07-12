@@ -29,7 +29,7 @@ impl NowPlayingPanel {
     pub fn new() -> Self {
         let widget = gtk::Box::new(gtk::Orientation::Vertical, 12);
         widget.add_css_class("sidebar");
-        widget.set_size_request(260, -1);
+        widget.set_size_request(280, -1);
         widget.set_margin_top(10);
         widget.set_margin_bottom(10);
         widget.set_margin_start(8);
@@ -87,6 +87,7 @@ impl NowPlayingPanel {
         about_body.set_wrap(true);
         about_body.set_halign(gtk::Align::Start);
         about_body.set_xalign(0.0);
+        about_body.set_max_width_chars(24);
 
         widget.append(&about_heading);
         widget.append(&about_body);
