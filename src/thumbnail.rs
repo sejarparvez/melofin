@@ -18,10 +18,10 @@ use std::path::PathBuf;
 pub fn fetch(url: &str) -> Result<Vec<u8>> {
     let path = cache_path(url);
 
-    if let Some(path) = &path {
-        if let Ok(bytes) = std::fs::read(path) {
-            return Ok(bytes);
-        }
+    if let Some(path) = &path
+        && let Ok(bytes) = std::fs::read(path)
+    {
+        return Ok(bytes);
     }
 
     let response = ureq::get(url)

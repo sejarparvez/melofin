@@ -11,13 +11,6 @@ default-run = "melofin"
 name = "melofin"
 path = "src/main.rs"
 
-[[bin]]
-name = "search-test"
-path = "src/bin/search_test.rs"
-
-[[bin]]
-name = "ui-shell"
-path = "src/bin/ui_shell.rs"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }

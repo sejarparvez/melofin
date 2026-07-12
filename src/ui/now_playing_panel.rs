@@ -19,6 +19,12 @@ pub struct NowPlayingPanel {
     current_thumbnail_url: RefCell<String>,
 }
 
+impl Default for NowPlayingPanel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NowPlayingPanel {
     pub fn new() -> Self {
         let widget = gtk::Box::new(gtk::Orientation::Vertical, 12);

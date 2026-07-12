@@ -211,7 +211,7 @@ fn build_row(
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 14);
     for track in tracks {
         let on_select = on_select.clone();
-        row.append(&track_card(track, move |t| on_select(t)));
+        row.append(&track_card(track, on_select));
     }
 
     let scroller = gtk::ScrolledWindow::new();

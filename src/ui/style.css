@@ -1,3 +1,4 @@
+/* biome-ignore lint/correctness/noUnknownTypeSelector: this is fine */
 window {
     background-color: #000000;
 }
@@ -29,6 +30,7 @@ window {
 }
 
 .home-card:hover {
+    /* biome-ignore lint/correctness/noUnknownFunction: this is fine */
     background-color: alpha(#ffffff, 0.06);
 }
 
