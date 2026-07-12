@@ -1,9 +1,6 @@
-//! Entry point for the GTK UI. All the actual UI logic lives in
-//! `melofin::ui`, split into its own module tree (top bar, and more views
-//! as they're built) — see src/ui/mod.rs.
-
-use gtk::glib;
-
-fn main() -> glib::ExitCode {
-    melofin::ui::run()
+//! Entry point for the GTK4/libadwaita UI binary. Actual window/widget
+//! assembly lives in `melofin::ui` so it can be split by concern
+//! (search view, player bar, etc.) instead of one growing file.
+fn main() -> gtk::glib::ExitCode {
+    melofin::ui::window::run()
 }
