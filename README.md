@@ -1,155 +1,143 @@
 # Melofin
 
-A native desktop YouTube Music client for Linux/Hyprland, inspired by [Metrolist](https://github.com/metrolistgroup/metrolist) (Android).
+**A native desktop YouTube Music client for Linux (Hyprland/Wayland-focused)**, built in Rust with GTK4 + libadwaita.
 
-## Overview
+## Current Status (as of July 2026)
 
-Melofin is a Rust-based YouTube Music client designed to provide a native, performant experience on Linux desktops—particularly optimized for Hyprland/Wayland environments. It leverages the InnerTube API via `rustypipe` for backend operations and `libmpv` for high-quality audio playback.
+**Functional GUI application** with search, playback, bottom player bar, top bar, and full MPRIS support.
 
-## Features
+### Features Implemented
+- **Search**: yt-dlp powered search (`ytsearch10:`) with robust parsing and unit tests.
+- **Playback**: Long-lived headless `mpv` process controlled via JSON IPC socket.
+  - Play/pause, seek (absolute/relative), volume.
+  - Gapless-ready architecture.
+- **UI** (GTK4 + libadwaita):
+  - Clean Adwaita window (optimized for tiling).
+  - Top bar with search entry + overflow menu (Quit, About).
+  - Search results view.
+  - Bottom player bar with progress/seek, controls, and live updates.
+- **Desktop Integration**:
+  - Full MPRIS server (`playerctl`, media keys, waybar, GNOME/KDE widgets work).
+  - Background player thread with async channels for clean UI ↔ Player separation.
+- **Developer Experience**:
+  - Multiple binaries: `melofin` (full app), `search-test`, `ui-shell`.
+  - Tracing logs, dotenv support, proper error handling.
+  - Unit tests for search parsing.
 
-- **Search** — Songs, albums, artists, and playlists
-- **Home Feed** — Quick picks and personalized recommendations
-- **Playback** — Background/gapless playback with full MPRIS integration (media keys, waybar/notification controls)
-- **Library Management** — Playlists, saved songs/albums, queue management
-- **Offline Caching** — Cache streamed tracks for offline listening
-- **Account Sync** — Optional YouTube account login (cookie-based auth via `rustypipe`) for library synchronization
-
-## Tech Stack
-
-| Component          | Technology                                            | Notes                                                                             |
-| ------------------ | ----------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Language           | Rust                                                  | Edition 2024                                                                      |
-| YT Music Backend   | [`rustypipe`](https://github.com/TeamPiped/rustypipe) | InnerTube client — search, browse, library, playlists, stream URL extraction      |
-| Playback           | `libmpv` (via `libmpv-rs` or FFI)                     | Handles adaptive/Opus streams, gapless playback, seek/volume control              |
-| UI                 | GTK4 + libadwaita                                     | Native look on Wayland/Hyprland, no custom theming needed                         |
-| Local Storage      | SQLite (`rusqlite`)                                   | Library cache, playlists, downloaded track metadata                               |
-| System Integration | MPRIS (`mpris-server`)                                | Media keys, waybar/notification controls                                          |
-| Async Runtime      | tokio                                                 | Required by `rustypipe`; drives GTK async bridging via `glib::spawn_future_local` |
-
-## Architecture
+### Architecture Overview
 
 ```
-┌─────────────┐     ┌──────────────┐     ┌────────────┐
-│   UI layer   │◄───►│  App/State    │◄───►│  rustypipe  │──► YouTube Music
-│ (GTK4/Adwaita)│     │  (player svc) │     │   client    │
-└─────────────┘     └──────┬───────┘     └────────────┘
-                            │
-                    ┌───────┴───────┐
-                    │ libmpv (audio) │
-                    │ MPRIS (system) │
-                    │ SQLite (cache) │
-                    └───────────────┘
+UI (GTK4/Adwaita)  ↔  async-channel  ↔  Player Service (tokio thread)
+                                                  │
+                                           MpvController (IPC)
+                                                  │
+                                           mpv subprocess (headless)
+                                                  │
+                                           MPRIS Server (mpris-server)
 ```
 
-## Project Status
+- Player runs in its own thread with a `LocalSet` to support MPRIS (Rc-based).
+- State flows back to UI via receiver for live updates (progress, now-playing, pause state).
+- Commands (Play, TogglePause, Seek, SetVolume) sent via channel.
 
-🚧 **Early Development** — Currently at **Build Step 1** (Backend spike)
+### Tech Stack
 
-The project follows an incremental build plan:
+| Component | Technology | Notes |
+|-----------|------------|-------|
+| Language  | Rust (2024 edition) | - |
+| UI        | GTK4 + libadwaita | Native look & feel |
+| Playback  | mpv (subprocess + JSON IPC) | Reliable, high quality |
+| System Integration | mpris-server | Media controls |
+| Search    | yt-dlp | Simple & effective |
+| Async     | tokio + async-channel | - |
+| Logging   | tracing + tracing-subscriber | - |
 
-1. **Backend spike** ✅ — Cargo workspace, `rustypipe` wired up, search + stream URL resolution working (CLI test binary)
-2. **Playback spike** — Pipe resolved stream URL into `libmpv`, verify headless playback
-3. **MPRIS** — Wrap player with MPRIS for media key support
-4. **UI shell** — GTK4/libadwaita window: search box + results list
-5. **Wire UI → player service** — Connect search results and playback controls
-6. **SQLite layer** — Metadata cache, then playlists/library
-7. **Auth** — Cookie-based YouTube login for library sync (last, optional)
+**Not yet implemented** (per original roadmap):
+- rustypipe / official InnerTube integration
+- Queue / playlists / library management
+- SQLite persistence / offline cache
+- Account sync / auth
+- Lyrics, home feed, advanced browsing
+
+---
 
 ## Getting Started
 
 ### Prerequisites
 
-- **Rust** (stable, edition 2024) — install via [rustup](https://rustup.rs/)
-- **libmpv** — system dependency for audio playback
-  - Arch: `pacman -S mpv`
-  - Ubuntu/Debian: `apt install libmpv-dev`
-  - Fedora: `dnf install mpv-devel`
-- **GTK4 + libadwaita** — for UI development
-  - Arch: `pacman -S gtk4 libadwaita`
-  - Ubuntu/Debian: `apt install libgtk-4-dev libadwaita-1-dev`
-  - Fedora: `dnf install gtk4-devel libadwaita-devel`
-- **rustypipe-botguard** binary — required for PO tokens (stream access)
-  - See [rustypipe docs](https://github.com/TeamPiped/rustypipe#botguard) for setup
+```bash
+# Arch / Hyprland (recommended)
+sudo pacman -S mpv yt-dlp gtk4 libadwaita
 
-### Building
+# Debian/Ubuntu
+sudo apt install mpv yt-dlp libgtk-4-dev libadwaita-1-dev
+```
+
+### Build & Run
 
 ```bash
-# Clone the repository
 git clone https://github.com/sejarparvez/melofin.git
 cd melofin
 
-# Build the project
-cargo build --release
+# Full application
+cargo run
 
-# Run the CLI test binary (search demo)
-cargo run -- "search query"
-# Example: cargo run -- "lofi"
+# Or specific binaries
+cargo run --bin search-test -- "lofi beats"
+cargo run --bin ui-shell
 ```
+
+### Environment Variables
+
+- `RUST_LOG=debug` — for detailed logs
+
+See `env.example` for more.
 
 ### Development
 
 ```bash
-# Run with debug logging
-RUST_LOG=debug cargo run -- "your search"
-
-# Format code
 cargo fmt
-
-# Lint
 cargo clippy
-
-# Run tests (when available)
 cargo test
+
+# Watch logs
+RUST_LOG=debug cargo run
 ```
 
 ## Project Structure
 
 ```
-melofin/
-├── src/
-│   └── main.rs          # CLI entry point (search demo)
-├── doc/
-│   └── GUIDE.md         # Architecture & development guide
-├── Cargo.toml           # Project manifest
-├── Cargo.lock           # Dependency lockfile
-├── clippy.toml          # Clippy configuration
-├── rustfmt.toml         # Rustfmt configuration
-├── rustypipe_cache.json # rustypipe cache (auto-generated)
-└── .gitignore
+src/
+├── lib.rs
+├── main.rs                 # Full app entry (CLI fallback + GUI)
+├── bin/
+│   ├── search_test.rs
+│   └── ui_shell.rs
+├── search.rs               # yt-dlp + parser + tests
+├── mpv.rs                  # IPC controller
+├── player.rs               # Background service + state
+├── mpris.rs                # MPRIS integration
+└── ui/
+    ├── window.rs
+    ├── top_bar.rs
+    ├── search_view.rs
+    └── player_bar.rs
 ```
 
-## Configuration
+## Roadmap (Next Steps)
 
-### Environment Variables
-
-| Variable   | Description                              | Default |
-| ---------- | ---------------------------------------- | ------- |
-| `RUST_LOG` | Logging level (debug, info, warn, error) | `info`  |
-
-### rustypipe Cache
-
-The `rustypipe_cache.json` file stores authentication cookies and botguard data. It's auto-generated and should not be committed (listed in `.gitignore`).
-
-## Roadmap / Open Questions
-
-- [ ] Offline download storage format/location and cache size limits
-- [ ] Playlist import (M3U/CSV, matching Metrolist's feature)
-- [ ] Lyrics support (Metrolist uses SimpMusic Lyrics API — not yet scoped)
-- [ ] Full GTK4 UI implementation
-- [ ] System tray / background daemon mode
-- [ ] Keyboard shortcuts and global hotkeys
+- Polish current implementation (UI/UX, stability, error handling)
+- Add queue management
+- Integrate rustypipe for richer metadata & features
+- Persistence (SQLite)
+- Advanced features (offline, library, etc.)
 
 ## Contributing
 
-This project is in early development. Contributions are welcome once the core architecture is stabilized. Please check the [GUIDE.md](doc/GUIDE.md) for architecture details and build order.
+Contributions welcome! Focus on current architecture (channels, player service, etc.).
 
 ## License
 
-GPL-3.0-or-later — see [LICENSE](LICENSE).
+GPL-3.0-or-later
 
-## Acknowledgments
-
-- [rustypipe](https://github.com/TeamPiped/rustypipe) — Excellent InnerTube client library
-- [Metrolist](https://github.com/metrolistgroup/metrolist) — Design inspiration
-- [libmpv](https://mpv.io/) — Powerful media playback backend
+Built with ❤️ for Linux desktop music listening.
