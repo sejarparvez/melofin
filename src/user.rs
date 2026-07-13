@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
-use sha1::{Digest, Sha1};
 use serde::{Deserialize, Serialize};
+use sha1::{Digest, Sha1};
 use std::path::Path;
 
 /// User profile parsed from YouTube Music after login.
@@ -49,7 +49,10 @@ impl UserProfile {
             return Self::guest();
         }
         // Debug: log cookie names being sent
-        let cookie_names: Vec<&str> = cookie_header.split(';').map(|c| c.trim().split('=').next().unwrap_or("")).collect();
+        let cookie_names: Vec<&str> = cookie_header
+            .split(';')
+            .map(|c| c.trim().split('=').next().unwrap_or(""))
+            .collect();
         tracing::info!(cookie_count = cookie_names.len(), cookie_names = ?cookie_names, "cookies being sent");
 
         let ua = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 \
@@ -111,7 +114,7 @@ impl UserProfile {
 // Cookie / HTTP helpers
 // ---------------------------------------------------------------------------
 
-fn build_cookie_header(contents: &str) -> String {
+pub fn build_cookie_header(contents: &str) -> String {
     contents
         .lines()
         .filter(|line| !line.starts_with('#') && !line.trim().is_empty())
@@ -129,7 +132,7 @@ fn build_cookie_header(contents: &str) -> String {
 
 /// Extracts the `INNERTUBE_API_KEY` from a `ytcfg.set({...})` block in
 /// the page HTML.
-fn extract_innertube_api_key(html: &str) -> Option<String> {
+pub fn extract_innertube_api_key(html: &str) -> Option<String> {
     // Look for "INNERTUBE_API_KEY" followed by colon then a quoted string value
     let marker = r#""INNERTUBE_API_KEY""#;
     let pos = html.find(marker)?;
@@ -150,7 +153,7 @@ fn extract_innertube_api_key(html: &str) -> Option<String> {
 }
 
 /// Extracts a cookie value by name from a `Cookie:` header string.
-fn get_cookie_value(header: &str, name: &str) -> Option<String> {
+pub fn get_cookie_value(header: &str, name: &str) -> Option<String> {
     let prefix = format!("{name}=");
     for part in header.split(';') {
         let part = part.trim();
@@ -163,7 +166,7 @@ fn get_cookie_value(header: &str, name: &str) -> Option<String> {
 
 /// Builds a `SAPISIDHASH` authorization header value required by YouTube's
 /// innertube API. Format: `SAPISIDHASH <timestamp>_<sha1(...)`
-fn build_sapisidhash(cookie_header: &str, origin: &str) -> Option<String> {
+pub fn build_sapisidhash(cookie_header: &str, origin: &str) -> Option<String> {
     let sapisid = get_cookie_value(cookie_header, "SAPISID")?;
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -194,7 +197,12 @@ fn fetch_profile_from_api(cookie_header: &str, ua: &str, api_key: &str) -> Optio
     None
 }
 
-fn fetch_profile_from_account_menu(cookie_header: &str, ua: &str, api_key: &str, origin: &str) -> Option<UserProfile> {
+fn fetch_profile_from_account_menu(
+    cookie_header: &str,
+    ua: &str,
+    api_key: &str,
+    origin: &str,
+) -> Option<UserProfile> {
     let url = format!(
         "https://music.youtube.com/youtubei/v1/account/account_menu?key={api_key}&prettyPrint=false"
     );
@@ -258,7 +266,8 @@ fn fetch_profile_from_account_menu(cookie_header: &str, ua: &str, api_key: &str,
 /// actions[0].openPopupAction.popup.multiPageMenuRenderer.header.activeAccountHeaderRenderer
 fn extract_profile_from_account_menu_json(json: &serde_json::Value) -> Option<UserProfile> {
     let header = json
-        .get("actions")?.as_array()?
+        .get("actions")?
+        .as_array()?
         .first()?
         .get("openPopupAction")?
         .get("popup")?
@@ -365,7 +374,10 @@ fn extract_avatar_url(html: &str) -> Option<String> {
 }
 
 fn extract_email(html: &str) -> Option<String> {
-    let markers = [r#""email":{"simpleText":""#, r#""loginEmail":{"simpleText":""#];
+    let markers = [
+        r#""email":{"simpleText":""#,
+        r#""loginEmail":{"simpleText":""#,
+    ];
     for marker in &markers {
         if let Some(pos) = html.find(marker) {
             let start = pos + marker.len();
@@ -405,7 +417,10 @@ mod tests {
 .youtube.com\tTRUE\t/\tTRUE\t1818466539\tLOGIN_INFO\tabc123
 .youtube.com\tTRUE\t/\tTRUE\t1818466539\tSAPISID\tdef456
 ";
-        assert_eq!(build_cookie_header(input), "LOGIN_INFO=abc123; SAPISID=def456");
+        assert_eq!(
+            build_cookie_header(input),
+            "LOGIN_INFO=abc123; SAPISID=def456"
+        );
     }
 
     #[test]
@@ -451,7 +466,10 @@ mod tests {
         });
         let p = extract_profile_from_account_menu_json(&json).unwrap();
         assert_eq!(p.name, "John Doe");
-        assert_eq!(p.avatar_url.as_deref(), Some("https://yt3.ggpht.com/photo.jpg"));
+        assert_eq!(
+            p.avatar_url.as_deref(),
+            Some("https://yt3.ggpht.com/photo.jpg")
+        );
         assert_eq!(p.email.as_deref(), Some("john@gmail.com"));
     }
 
@@ -477,7 +495,10 @@ mod tests {
         });
         let p = extract_profile_from_account_menu_json(&json).unwrap();
         assert_eq!(p.name, "Jane Smith");
-        assert_eq!(p.avatar_url.as_deref(), Some("https://yt3.ggpht.com/avatar.jpg"));
+        assert_eq!(
+            p.avatar_url.as_deref(),
+            Some("https://yt3.ggpht.com/avatar.jpg")
+        );
         assert!(p.email.is_none());
     }
 
@@ -512,9 +533,6 @@ mod tests {
     #[test]
     fn extract_email_works() {
         let html = r#""email":{"simpleText":"user@example.com"}"#;
-        assert_eq!(
-            extract_email(html).as_deref(),
-            Some("user@example.com")
-        );
+        assert_eq!(extract_email(html).as_deref(), Some("user@example.com"));
     }
 }

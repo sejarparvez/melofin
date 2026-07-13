@@ -139,7 +139,11 @@ fn build_ui(app: &adw::Application) {
         let _ = commands.send_blocking(PlayerCommand::Play(track));
     };
 
-    let home_view = HomeView::new(play_track.clone());
+    let home_cache_path = glib::user_cache_dir()
+        .join("melofin")
+        .join("home_feed.json");
+    let home_view =
+        HomeView::new(auth.cookies_path().to_path_buf(), home_cache_path, play_track.clone());
     let search_view = SearchView::new(&top_bar.search_entry, play_track);
     let _search_view = search_view;
 

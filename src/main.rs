@@ -2,5 +2,11 @@
 //! assembly lives in `melofin::ui` so it can be split by concern
 //! (search view, player bar, etc.) instead of one growing file.
 fn main() -> gtk::glib::ExitCode {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "info,melofin=debug".into()),
+        )
+        .init();
     melofin::ui::window::run()
 }

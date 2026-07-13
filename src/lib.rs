@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod home_feed;
+pub mod innertube;
 pub mod mpris;
 pub mod mpv;
 pub mod player;

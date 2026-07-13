@@ -2,23 +2,23 @@
 //! `window.rs`, which keeps this underneath the search popover — see
 //! `search_view.rs`'s doc comment).
 //!
-//! Data comes from `home_feed::fetch_home_feed()`, which is *not* a real
-//! personalized YouTube Music feed (that needs InnerTube auth — see
-//! `home_feed.rs`'s doc comment for why), but it's real, live search
-//! results rather than hardcoded data. The fetch runs on a background
+//! Data comes from `home_feed::fetch_home_feed()`, which tries the
+//! personalized InnerTube feed first (when logged in), then falls back
+//! to unpersonalized `yt-dlp` searches. The fetch runs on a background
 //! thread — same `thread::spawn` + `async_channel` + `spawn_future_local`
 //! pattern as `search_view.rs`'s debounced search — so the page starts in
 //! a loading state and swaps in rows once the feed arrives.
 //!
-//! Cards reuse `search::Track` rather than inventing a parallel type, so a
-//! future real feed just needs to keep producing `Vec<Track>`s to feed the
-//! same `build_row`/`track_card` functions.
+//! Cards reuse `search::Track` rather than inventing a parallel type, so
+//! both the InnerTube feed and the yt-dlp fallback produce the same
+//! `Vec<Track>`s to feed the same `build_row`/`track_card` functions.
 
 use crate::home_feed::HomeFeed;
 use crate::search::Track;
 use crate::ui::thumbnail_widget;
 use adw::prelude::*;
 use gtk::glib;
+use std::path::PathBuf;
 
 pub struct HomeView {
     pub widget: gtk::ScrolledWindow,
@@ -28,7 +28,11 @@ impl HomeView {
     /// `on_select` fires when the user clicks a card (or the hero card's
     /// play button), with the corresponding `Track` — wired the same way
     /// as `search_view::SearchView::new`'s `on_select`.
-    pub fn new(on_select: impl Fn(Track) + 'static + Clone) -> Self {
+    pub fn new(
+        cookies_path: PathBuf,
+        cache_path: PathBuf,
+        on_select: impl Fn(Track) + 'static + Clone,
+    ) -> Self {
         let content = gtk::Box::new(gtk::Orientation::Vertical, 24);
         content.set_margin_top(20);
         content.set_margin_bottom(24);
@@ -44,7 +48,7 @@ impl HomeView {
         feed_container.append(&loading_state());
         content.append(&feed_container);
 
-        load_feed(feed_container, on_select);
+        load_feed(feed_container, cookies_path, cache_path, on_select);
 
         let widget = gtk::ScrolledWindow::new();
         widget.set_vexpand(true);
@@ -56,15 +60,24 @@ impl HomeView {
 }
 
 /// Kicks off `home_feed::fetch_home_feed()` on a background thread (it
-/// shells out to `yt-dlp` per row — far too slow for the GTK main thread)
-/// and populates `container` with the result once it lands. Also called
-/// again by the error state's "Retry" button, so it's careful to leave
-/// `container` empty before it starts and fully replace its contents when
-/// done rather than assuming it's only ever called once.
-fn load_feed(container: gtk::Box, on_select: impl Fn(Track) + 'static + Clone) {
+/// shells out to `yt-dlp` per row or makes HTTP requests — far too slow
+/// for the GTK main thread) and populates `container` with the result
+/// once it lands. Also called again by the error state's "Retry" button,
+/// so it's careful to leave `container` empty before it starts and fully
+/// replace its contents when done rather than assuming it's only ever
+/// called once.
+fn load_feed(
+    container: gtk::Box,
+    cookies_path: PathBuf,
+    cache_path: PathBuf,
+    on_select: impl Fn(Track) + 'static + Clone,
+) {
     let (sender, receiver) = async_channel::bounded::<HomeFeed>(1);
+    let cookies = cookies_path.clone();
+    let cache = cache_path.clone();
     std::thread::spawn(move || {
-        let _ = sender.send_blocking(crate::home_feed::fetch_home_feed());
+        let _ = sender
+            .send_blocking(crate::home_feed::fetch_home_feed(&cookies, &cache));
     });
 
     glib::spawn_future_local(async move {
@@ -74,7 +87,7 @@ fn load_feed(container: gtk::Box, on_select: impl Fn(Track) + 'static + Clone) {
         clear(&container);
 
         if feed.sections.is_empty() {
-            container.append(&error_state(container.clone(), on_select));
+            container.append(&error_state(container.clone(), cookies_path, cache_path, on_select));
             return;
         }
 
@@ -83,7 +96,11 @@ fn load_feed(container: gtk::Box, on_select: impl Fn(Track) + 'static + Clone) {
         // given more visual weight, the way a real Quick Picks hero would
         // be.
         if let Some(first) = feed.sections[0].tracks.first() {
-            container.append(&build_hero_card(first.clone(), on_select.clone()));
+            container.append(&build_hero_card(
+                first.clone(),
+                &feed.sections[0].title,
+                on_select.clone(),
+            ));
         }
 
         for section in feed.sections {
@@ -124,7 +141,12 @@ fn loading_state() -> gtk::Widget {
 /// see `home_feed::fetch_home_feed`'s doc comment on why a partial feed
 /// beats an error mid-page, but an *entirely* empty one still needs
 /// something better than a blank page.
-fn error_state(container: gtk::Box, on_select: impl Fn(Track) + 'static + Clone) -> gtk::Widget {
+fn error_state(
+    container: gtk::Box,
+    cookies_path: PathBuf,
+    cache_path: PathBuf,
+    on_select: impl Fn(Track) + 'static + Clone,
+) -> gtk::Widget {
     let box_ = gtk::Box::new(gtk::Orientation::Vertical, 12);
     box_.set_valign(gtk::Align::Center);
     box_.set_halign(gtk::Align::Center);
@@ -143,7 +165,12 @@ fn error_state(container: gtk::Box, on_select: impl Fn(Track) + 'static + Clone)
     retry.connect_clicked(move |_| {
         clear(&container);
         container.append(&loading_state());
-        load_feed(container.clone(), on_select.clone());
+        load_feed(
+            container.clone(),
+            cookies_path.clone(),
+            cache_path.clone(),
+            on_select.clone(),
+        );
     });
 
     box_.append(&label);
@@ -250,8 +277,13 @@ fn shortcut_tile(shortcut: &Shortcut) -> gtk::Widget {
 /// The single big hero card, anchored to a real track from the first
 /// loaded row (see `load_feed`) — art, title and artist all come from
 /// `track`, and its play button sends the real `track` (with a real
-/// `url`), not a placeholder.
-fn build_hero_card(track: Track, on_select: impl Fn(Track) + 'static) -> gtk::Widget {
+/// `url`), not a placeholder. The `section_title` is shown as the
+/// eyebrow above the track title (e.g. "Quick picks", "Listen again").
+fn build_hero_card(
+    track: Track,
+    section_title: &str,
+    on_select: impl Fn(Track) + 'static,
+) -> gtk::Widget {
     let card = gtk::Box::new(gtk::Orientation::Horizontal, 16);
     card.add_css_class("card");
     card.add_css_class("hero-card");
@@ -279,7 +311,7 @@ fn build_hero_card(track: Track, on_select: impl Fn(Track) + 'static) -> gtk::Wi
     text_box.set_valign(gtk::Align::Center);
     text_box.set_hexpand(true);
 
-    let eyebrow = gtk::Label::new(Some("Trending now"));
+    let eyebrow = gtk::Label::new(Some(section_title));
     eyebrow.add_css_class("caption");
     eyebrow.add_css_class("dim-label");
     eyebrow.set_halign(gtk::Align::Start);

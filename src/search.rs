@@ -1,7 +1,8 @@
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use std::process::Command;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Track {
     pub title: String,
     pub artist: String,
