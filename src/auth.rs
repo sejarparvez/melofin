@@ -17,6 +17,7 @@
 //! calls into this and renders the result.
 
 use anyhow::{Context, Result, bail};
+use rookie::common::enums::Cookie as RookieCookie;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -145,6 +146,109 @@ impl AuthManager {
             Err(e) => Err(e).context("couldn't remove cookies file"),
         }
     }
+
+    /// Imports cookies read by `rookie` from the user's browser, converts
+    /// them to Netscape format, writes the file, and validates. Rolls back
+    /// on validation failure, same as `import_cookies_file`.
+    pub async fn import_cookies_from_rookie(
+        &self,
+        cookies: Vec<RookieCookie>,
+    ) -> Result<()> {
+        if cookies.is_empty() {
+            bail!("no cookies returned from browser — are you logged into YouTube Music?");
+        }
+
+        let contents = cookies_to_netscape(&cookies);
+
+        if let Some(parent) = self.cookies_path.parent() {
+            tokio::fs::create_dir_all(parent).await.ok();
+        }
+        tokio::fs::write(&self.cookies_path, &contents)
+            .await
+            .context("couldn't save cookies file")?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if let Ok(meta) = tokio::fs::metadata(&self.cookies_path).await {
+                let mut perms = meta.permissions();
+                perms.set_mode(0o600);
+                let _ = tokio::fs::set_permissions(&self.cookies_path, perms).await;
+            }
+        }
+
+        if let Err(e) = self.validate().await {
+            let _ = tokio::fs::remove_file(&self.cookies_path).await;
+            return Err(e);
+        }
+
+        Ok(())
+    }
+}
+
+/// Converts a list of `rookie::Cookie`s to Netscape cookie-file format.
+pub fn cookies_to_netscape(cookies: &[RookieCookie]) -> String {
+    let mut out = String::from("# Netscape HTTP Cookie File\n");
+    for c in cookies {
+        let include_subdomains = if c.domain.starts_with('.') {
+            "TRUE"
+        } else {
+            "FALSE"
+        };
+        let secure = if c.secure { "TRUE" } else { "FALSE" };
+        let expires = c.expires.unwrap_or(0);
+        out += &format!(
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+            c.domain, include_subdomains, c.path, secure, expires, c.name, c.value,
+        );
+    }
+    out
+}
+
+/// Known browser config directories on Linux. Each entry is
+/// `(display_name, relative_config_path)` under `$HOME`.
+pub const KNOWN_BROWSERS: &[(&str, &str)] = &[
+    ("Firefox", ".mozilla/firefox"),
+    ("Chrome", ".config/google-chrome"),
+    ("Chromium", ".config/chromium"),
+    ("Brave", ".config/BraveSoftware/Brave-Browser"),
+    ("Vivaldi", ".config/vivaldi"),
+    ("LibreWolf", ".librewolf"),
+];
+
+/// Returns the display names of installed browsers (those whose config
+/// directory exists under `$HOME`). Used by the login dialog to show
+/// auto-import buttons.
+pub fn detect_browsers() -> Vec<&'static str> {
+    let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+    let Some(home) = home else {
+        return Vec::new();
+    };
+    KNOWN_BROWSERS
+        .iter()
+        .filter(|(_, path)| home.join(path).is_dir())
+        .map(|(name, _)| *name)
+        .collect()
+}
+
+/// Calls the appropriate `rookie` function for the given browser name and
+/// filters cookies to YouTube Music domains.
+pub fn rookie_import(browser: &str) -> Result<Vec<RookieCookie>> {
+    let domains = vec![
+        "youtube.com".into(),
+        "music.youtube.com".into(),
+        ".youtube.com".into(),
+    ];
+    let result = match browser {
+        "Firefox" => rookie::firefox(Some(domains)),
+        "Chrome" => rookie::chrome(Some(domains)),
+        "Chromium" => rookie::chromium(Some(domains)),
+        "Brave" => rookie::brave(Some(domains)),
+        "Vivaldi" => rookie::vivaldi(Some(domains)),
+        "LibreWolf" => rookie::librewolf(Some(domains)),
+        _ => bail!("unsupported browser: {browser}"),
+    };
+    result.map_err(|e| anyhow::anyhow!("{e}"))
 }
 
 /// Parses a Netscape-format cookies.txt (tab-separated: domain,

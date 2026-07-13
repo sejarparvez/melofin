@@ -6,3 +6,4 @@ pub mod player;
 pub mod search;
 pub mod thumbnail;
 pub mod ui;
+pub mod user;

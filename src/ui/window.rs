@@ -6,7 +6,8 @@ use crate::ui::login_dialog;
 use crate::ui::now_playing_panel::NowPlayingPanel;
 use crate::ui::player_bar::PlayerBar;
 use crate::ui::search_view::SearchView;
-use crate::ui::top_bar::{build_top_bar, set_account_state};
+use crate::ui::top_bar::build_top_bar;
+use crate::user::UserProfile;
 use adw::prelude::*;
 use gtk::gdk;
 use gtk::gio;
@@ -20,9 +21,7 @@ pub fn run() -> glib::ExitCode {
     app.run()
 }
 
-/// Loads `ui/style.css` and registers it for the default display. Was
-/// previously defined but never actually loaded — every `add_css_class`
-/// call elsewhere in `ui/` only takes effect once this runs.
+/// Loads `ui/style.css` and registers it for the default display.
 fn load_css() {
     let provider = gtk::CssProvider::new();
     provider.load_from_string(include_str!("style.css"));
@@ -34,11 +33,7 @@ fn load_css() {
 }
 
 /// Melofin's XDG data dir (`~/.local/share/melofin` on most Linux setups),
-/// created with `0700` permissions since it holds the cookies file
-/// (`AuthManager` sets the file itself to `0600` — see `auth.rs`). Returns
-/// the path regardless of whether creation/chmod succeeded; `AuthManager`
-/// surfaces any resulting IO failure itself the first time it actually
-/// tries to read or write through this path.
+/// created with `0700` permissions since it holds the cookies file.
 fn init_data_dir() -> std::path::PathBuf {
     let dir = glib::user_data_dir().join("melofin");
     if let Err(e) = std::fs::create_dir_all(&dir) {
@@ -60,19 +55,81 @@ fn build_ui(app: &adw::Application) {
     load_css();
     register_app_actions(app);
 
-    let auth = AuthManager::new(&init_data_dir());
+    let data_dir = init_data_dir();
+    let auth = AuthManager::new(&data_dir);
 
     let top_bar = build_top_bar();
-    set_account_state(&top_bar.account_button, auth.current_state());
 
-    // Background player thread: owns tokio + the mpv subprocess + MPRIS.
-    // Every other widget only ever talks to it through `handle.commands` /
-    // `handle.state` — see src/player.rs.
+    // Show cached profile immediately, or the logged-out state.
+    match auth.current_state() {
+        AuthState::LoggedIn => {
+            if let Some(profile) = UserProfile::load(&data_dir) {
+                top_bar.set_user_profile(&profile);
+            } else {
+                let profile = UserProfile {
+                    name: "YouTube Music".to_string(),
+                    ..Default::default()
+                };
+                top_bar.set_user_profile(&profile);
+            }
+            // Validate the session in the background. If it expired,
+            // flip back to logged out.
+            let auth_val = auth.clone();
+            let data_dir_val = data_dir.clone();
+            let top_bar_val = top_bar.clone();
+            login_dialog::run_auth(
+                move || {
+                    let auth = auth_val;
+                    async move { auth.validate().await }
+                },
+                move |result| {
+                    if result.is_err() {
+                        tracing::warn!("session expired on startup, clearing");
+                        UserProfile::remove_cache(&data_dir_val);
+                        top_bar_val.set_logged_out();
+                    }
+                },
+            );
+        }
+        AuthState::LoggedOut => {
+            top_bar.set_logged_out();
+        }
+    }
+
+    // -- Account popover: logout button ----------------------------------------
+
+    {
+        let auth = auth.clone();
+        let data_dir = data_dir.clone();
+        let top_bar = top_bar.clone();
+        top_bar.logout_button.clone().connect_clicked(move |button| {
+            button.set_sensitive(false);
+            let auth = auth.clone();
+            let data_dir = data_dir.clone();
+            let top_bar = top_bar.clone();
+            let button = button.clone();
+            login_dialog::run_auth(
+                move || {
+                    let auth = auth.clone();
+                    async move { auth.logout().await }
+                },
+                move |result| {
+                    button.set_sensitive(true);
+                    if let Err(e) = result {
+                        tracing::warn!("logout failed: {e}");
+                        return;
+                    }
+                    UserProfile::remove_cache(&data_dir);
+                    top_bar.set_logged_out();
+                },
+            );
+        });
+    }
+
+    // -- Build the rest of the window ------------------------------------------
+
     let handle = player::spawn_player_thread();
 
-    // Shared by both Home and Search cards: sends a track to the player,
-    // except placeholder home cards (empty `url` — see `home_view.rs`),
-    // which are scaffolding until a real home-feed source exists.
     let commands = handle.commands.clone();
     let play_track = move |track: crate::search::Track| {
         if track.url.is_empty() {
@@ -83,21 +140,10 @@ fn build_ui(app: &adw::Application) {
     };
 
     let home_view = HomeView::new(play_track.clone());
-
-    // The search entry lives in the top bar (`top_bar.search_entry`), not
-    // here. SearchView no longer has a visible widget of its own — results
-    // now show in a `gtk::Popover` parented to `top_bar.search_entry`
-    // (see ui/search_view.rs), so home stays on screen underneath instead
-    // of being swapped out.
     let search_view = SearchView::new(&top_bar.search_entry, play_track);
-    // Nothing else references search_view directly, but it must stay alive
-    // for the popover and its signal connections to keep working.
     let _search_view = search_view;
 
     let player_bar = PlayerBar::new(handle.commands.clone());
-
-    // Left/right panels are always visible (matching Spotify, which keeps
-    // its library sidebar around across views).
     let library_sidebar = LibrarySidebar::new();
     let now_playing_panel = NowPlayingPanel::new();
 
@@ -119,41 +165,65 @@ fn build_ui(app: &adw::Application) {
     content.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
     content.append(&player_bar.widget);
 
-    // Wraps everything so `login_dialog` (and anything else later) has
-    // somewhere to show toasts — a toast added to a widget that isn't part
-    // of a `ToastOverlay`'s tree silently does nothing.
     let toast_overlay = adw::ToastOverlay::new();
     toast_overlay.set_child(Some(&content));
 
     let window = adw::ApplicationWindow::new(app);
     window.set_title(Some("Melofin"));
-    // Wide enough by default to show both sidebars alongside the center
-    // page — the old 480x640 default was sized for a single-pane search
-    // view, not a 3-column layout.
     window.set_default_width(1100);
     window.set_default_height(720);
     window.set_content(Some(&toast_overlay));
+
+    // -- Account popover: login button (needs window + toast_overlay) ----------
 
     {
         let window = window.clone();
         let toast_overlay = toast_overlay.clone();
         let auth = auth.clone();
-        let account_button = top_bar.account_button.clone();
-        top_bar.account_button.connect_clicked(move |_| {
-            let on_state_changed = {
-                let account_button = account_button.clone();
-                move |state: AuthState| {
-                    set_account_state(&account_button, state);
+        let data_dir = data_dir.clone();
+        let top_bar = top_bar.clone();
+        top_bar.login_button.clone().connect_clicked(move |_| {
+            let window = window.clone();
+            let toast_overlay = toast_overlay.clone();
+            let auth = auth.clone();
+            let data_dir = data_dir.clone();
+            let top_bar = top_bar.clone();
+
+            let auth_inner = auth.clone();
+            let on_state_changed = move |state: AuthState| match state {
+                AuthState::LoggedIn => {
+                    let data_dir = data_dir.clone();
+                    let auth = auth_inner.clone();
+                    let top_bar = top_bar.clone();
+                    login_dialog::run_auth(
+                        move || {
+                            let auth = auth.clone();
+                            async move {
+                                let cookies = auth.cookies_path().to_path_buf();
+                                tokio::task::spawn_blocking(move || {
+                                    UserProfile::fetch_from_cookies(&cookies)
+                                })
+                                .await
+                                .unwrap_or_else(|_| UserProfile::guest())
+                            }
+                        },
+                        move |profile| {
+                            let _ = profile.save(&data_dir);
+                            top_bar.set_user_profile(&profile);
+                        },
+                    );
+                }
+                AuthState::LoggedOut => {
+                    UserProfile::remove_cache(&data_dir);
+                    top_bar.set_logged_out();
                 }
             };
-            login_dialog::present(
-                &window,
-                toast_overlay.clone(),
-                auth.clone(),
-                on_state_changed,
-            );
+
+            login_dialog::present(&window, toast_overlay, auth, on_state_changed);
         });
     }
+
+    // -- Player state updates --------------------------------------------------
 
     let state_rx = handle.state;
     glib::spawn_future_local(async move {
@@ -166,14 +236,7 @@ fn build_ui(app: &adw::Application) {
     window.present();
 }
 
-/// Registers the `app.*` actions the top bar's overflow menu references
-/// (`ui/top_bar.rs::overflow_menu`). `quit` is real from day one — it's the
-/// only way to close the app without window-manager decorations (Hyprland
-/// tiling setup has none) — and `about` is trivial to make real too.
-/// `preferences` is intentionally left unregistered: with no action bound
-/// to it, GTK automatically greys the menu item out rather than doing
-/// nothing silently, which is the honest state until a preferences window
-/// actually exists.
+/// Registers the `app.*` actions the top bar's overflow menu references.
 fn register_app_actions(app: &adw::Application) {
     let quit_action = gio::SimpleAction::new("quit", None);
     {

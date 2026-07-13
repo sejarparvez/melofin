@@ -5,19 +5,32 @@
 //! for features that don't exist yet (view navigation, offline caching).
 //! Wire them up as those land instead of faking functionality now.
 
-use crate::auth::AuthState;
+use crate::user::UserProfile;
 use adw::prelude::*;
 use gtk::gio;
 
 /// The built top bar, plus the widgets callers need to hook up behavior to.
+///
+/// All fields are GTK widgets (reference-counted), so cloning is cheap and
+/// gives shared ownership — multiple closures can hold a clone.
+#[derive(Clone)]
 pub struct TopBar {
     pub root: gtk::Box,
     pub search_entry: gtk::SearchEntry,
     pub home_button: gtk::Button,
-    /// Opens the account/login dialog on click — `window.rs` connects the
-    /// handler, since that's where `AuthManager` and the window's
-    /// `ToastOverlay` live.
-    pub account_button: gtk::Button,
+    /// Account `MenuButton` — clicking it toggles the user popover.
+    /// `window.rs` connects signal handlers since that's where
+    /// `AuthManager` and the window's `ToastOverlay` live.
+    pub account_button: gtk::MenuButton,
+    popover_name: gtk::Label,
+    popover_email: gtk::Label,
+    popover_avatar: adw::Avatar,
+    /// "Log out" button inside the account popover — `window.rs` connects
+    /// the click handler.
+    pub logout_button: gtk::Button,
+    /// "Log in" button inside the account popover — `window.rs` connects
+    /// the click handler.
+    pub login_button: gtk::Button,
 }
 
 pub fn build_top_bar() -> TopBar {
@@ -30,19 +43,59 @@ pub fn build_top_bar() -> TopBar {
 
     let left = build_left_cluster();
     let center = build_search_cluster();
-    let right = build_right_cluster();
+    let (right_root, right_btn, popover_name, popover_email, popover_avatar, logout_button, login_button) =
+        build_right_cluster();
 
     root.append(&left.root);
     root.append(&center.root);
-    root.append(&right.root);
+    root.append(&right_root);
 
     TopBar {
         root,
         search_entry: center.search_entry,
         home_button: left.home_button,
-        account_button: right.account_button,
+        account_button: right_btn,
+        popover_name,
+        popover_email,
+        popover_avatar,
+        logout_button,
+        login_button,
     }
 }
+
+// -- Public update helpers ---------------------------------------------------
+
+impl TopBar {
+    /// Resets the popover to the logged-out state: generic avatar, no
+    /// name/email, "Log in" button visible, "Log out" hidden.
+    pub fn set_logged_out(&self) {
+        self.popover_avatar.set_text(None);
+        self.popover_name.set_text("Not signed in");
+        self.popover_email.set_visible(false);
+        self.logout_button.set_visible(false);
+        self.login_button.set_visible(true);
+        self.account_button.set_tooltip_text(Some("Account — not signed in"));
+    }
+
+    /// Updates the popover with the given profile: avatar initial, name,
+    /// email, and shows the "Log out" button.
+    pub fn set_user_profile(&self, profile: &UserProfile) {
+        self.popover_avatar.set_text(Some(&profile.initial()));
+        self.popover_name.set_text(&profile.name);
+        if let Some(email) = &profile.email {
+            self.popover_email.set_text(email);
+            self.popover_email.set_visible(true);
+        } else {
+            self.popover_email.set_visible(false);
+        }
+        self.logout_button.set_visible(true);
+        self.login_button.set_visible(false);
+        self.account_button
+            .set_tooltip_text(Some("Account — signed in"));
+    }
+}
+
+// -- Internals ---------------------------------------------------------------
 
 struct LeftCluster {
     root: gtk::Box,
@@ -111,16 +164,18 @@ fn build_search_cluster() -> CenterCluster {
     CenterCluster { root, search_entry }
 }
 
-struct RightCluster {
-    root: gtk::Box,
-    account_button: gtk::Button,
-}
-
-/// Downloads status and account. Downloads stays disabled (needs the
-/// offline-caching layer, Step 6). Account is now live — clicking it opens
-/// the login dialog (`window.rs` wires the click handler, since it owns
-/// the `AuthManager` and `ToastOverlay` this needs).
-fn build_right_cluster() -> RightCluster {
+/// Builds the account `MenuButton` with its user popover. Returns the
+/// root container, button, plus handles to the popover labels/buttons
+/// so `TopBar` can update them.
+fn build_right_cluster() -> (
+    gtk::Box,
+    gtk::MenuButton,
+    gtk::Label,
+    gtk::Label,
+    adw::Avatar,
+    gtk::Button,
+    gtk::Button,
+) {
     let root = gtk::Box::new(gtk::Orientation::Horizontal, 4);
 
     let downloads_button = gtk::Button::from_icon_name("folder-download-symbolic");
@@ -129,9 +184,46 @@ fn build_right_cluster() -> RightCluster {
     downloads_button.set_tooltip_text(Some("Downloads"));
     downloads_button.set_sensitive(false); // TODO: enable once offline caching lands
 
-    let avatar = adw::Avatar::new(28, None, true);
-    let account_button = gtk::Button::new();
-    account_button.set_child(Some(&avatar));
+    // -- Account popover -------------------------------------------------------
+    let popover_avatar = adw::Avatar::new(48, Some("G"), true);
+
+    let popover_name = gtk::Label::new(Some("Not signed in"));
+    popover_name.add_css_class("title-2");
+
+    let popover_email = gtk::Label::new(None);
+    popover_email.add_css_class("dim-label");
+    popover_email.set_visible(false);
+
+    let logout_button = gtk::Button::with_label("Log out");
+    logout_button.add_css_class("destructive-action");
+    logout_button.set_visible(false);
+
+    let login_button = gtk::Button::with_label("Log in");
+    login_button.add_css_class("suggested-action");
+
+    let popover_box = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    popover_box.set_margin_top(12);
+    popover_box.set_margin_bottom(12);
+    popover_box.set_margin_start(16);
+    popover_box.set_margin_end(16);
+    popover_box.set_width_request(200);
+    popover_box.append(&popover_avatar);
+    popover_box.append(&popover_name);
+    popover_box.append(&popover_email);
+    popover_box.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
+    popover_box.append(&logout_button);
+    popover_box.append(&login_button);
+
+    let popover = gtk::Popover::new();
+    popover.set_child(Some(&popover_box));
+    popover.set_has_arrow(false);
+
+    // -- MenuButton ------------------------------------------------------------
+
+    let avatar_button_icon = adw::Avatar::new(28, Some("G"), true);
+    let account_button = gtk::MenuButton::new();
+    account_button.set_child(Some(&avatar_button_icon));
+    account_button.set_popover(Some(&popover));
     account_button.add_css_class("flat");
     account_button.add_css_class("circular");
     account_button.set_tooltip_text(Some("Account — not signed in"));
@@ -139,10 +231,15 @@ fn build_right_cluster() -> RightCluster {
     root.append(&downloads_button);
     root.append(&account_button);
 
-    RightCluster {
+    (
         root,
         account_button,
-    }
+        popover_name,
+        popover_email,
+        popover_avatar,
+        logout_button,
+        login_button,
+    )
 }
 
 fn overflow_menu() -> gio::Menu {
@@ -151,19 +248,4 @@ fn overflow_menu() -> gio::Menu {
     menu.append(Some("About Melofin"), Some("app.about"));
     menu.append(Some("Quit"), Some("app.quit"));
     menu
-}
-
-/// Reflects the current auth state on the account button's tooltip. Called
-/// once at startup with `AuthManager::current_state()`, and again from
-/// `window.rs`'s `on_state_changed` callback whenever `login_dialog`
-/// completes a login or logout.
-pub fn set_account_state(account_button: &gtk::Button, state: AuthState) {
-    match state {
-        AuthState::LoggedIn => {
-            account_button.set_tooltip_text(Some("Account — signed in"));
-        }
-        AuthState::LoggedOut => {
-            account_button.set_tooltip_text(Some("Account — not signed in"));
-        }
-    }
 }

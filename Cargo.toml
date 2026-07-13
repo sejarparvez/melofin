@@ -40,3 +40,5 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 async-channel = "2"
+rookie = "0.5.6"
+sha1 = "0.10"
