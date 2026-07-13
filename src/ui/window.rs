@@ -1,10 +1,12 @@
+use crate::auth::{AuthManager, AuthState};
 use crate::player::{self, PlayerCommand};
 use crate::ui::home_view::HomeView;
 use crate::ui::library_sidebar::LibrarySidebar;
+use crate::ui::login_dialog;
 use crate::ui::now_playing_panel::NowPlayingPanel;
 use crate::ui::player_bar::PlayerBar;
 use crate::ui::search_view::SearchView;
-use crate::ui::top_bar::build_top_bar;
+use crate::ui::top_bar::{build_top_bar, set_account_state};
 use adw::prelude::*;
 use gtk::gdk;
 use gtk::gio;
@@ -31,11 +33,37 @@ fn load_css() {
     );
 }
 
+/// Melofin's XDG data dir (`~/.local/share/melofin` on most Linux setups),
+/// created with `0700` permissions since it holds the cookies file
+/// (`AuthManager` sets the file itself to `0600` — see `auth.rs`). Returns
+/// the path regardless of whether creation/chmod succeeded; `AuthManager`
+/// surfaces any resulting IO failure itself the first time it actually
+/// tries to read or write through this path.
+fn init_data_dir() -> std::path::PathBuf {
+    let dir = glib::user_data_dir().join("melofin");
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        tracing::error!("failed to create data dir {}: {e}", dir.display());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(meta) = std::fs::metadata(&dir) {
+            let mut perms = meta.permissions();
+            perms.set_mode(0o700);
+            let _ = std::fs::set_permissions(&dir, perms);
+        }
+    }
+    dir
+}
+
 fn build_ui(app: &adw::Application) {
     load_css();
     register_app_actions(app);
 
+    let auth = AuthManager::new(&init_data_dir());
+
     let top_bar = build_top_bar();
+    set_account_state(&top_bar.account_button, auth.current_state());
 
     // Background player thread: owns tokio + the mpv subprocess + MPRIS.
     // Every other widget only ever talks to it through `handle.commands` /
@@ -91,6 +119,12 @@ fn build_ui(app: &adw::Application) {
     content.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
     content.append(&player_bar.widget);
 
+    // Wraps everything so `login_dialog` (and anything else later) has
+    // somewhere to show toasts — a toast added to a widget that isn't part
+    // of a `ToastOverlay`'s tree silently does nothing.
+    let toast_overlay = adw::ToastOverlay::new();
+    toast_overlay.set_child(Some(&content));
+
     let window = adw::ApplicationWindow::new(app);
     window.set_title(Some("Melofin"));
     // Wide enough by default to show both sidebars alongside the center
@@ -98,7 +132,28 @@ fn build_ui(app: &adw::Application) {
     // view, not a 3-column layout.
     window.set_default_width(1100);
     window.set_default_height(720);
-    window.set_content(Some(&content));
+    window.set_content(Some(&toast_overlay));
+
+    {
+        let window = window.clone();
+        let toast_overlay = toast_overlay.clone();
+        let auth = auth.clone();
+        let account_button = top_bar.account_button.clone();
+        top_bar.account_button.connect_clicked(move |_| {
+            let on_state_changed = {
+                let account_button = account_button.clone();
+                move |state: AuthState| {
+                    set_account_state(&account_button, state);
+                }
+            };
+            login_dialog::present(
+                &window,
+                toast_overlay.clone(),
+                auth.clone(),
+                on_state_changed,
+            );
+        });
+    }
 
     let state_rx = handle.state;
     glib::spawn_future_local(async move {

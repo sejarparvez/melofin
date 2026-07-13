@@ -2,18 +2,22 @@
 //! search pill, and a right-hand cluster for downloads/account.
 //!
 //! Several buttons here are intentionally disabled — they're placeholders
-//! for features that don't exist yet (view navigation, offline caching,
-//! auth). Wire them up as those land instead of faking functionality now.
+//! for features that don't exist yet (view navigation, offline caching).
+//! Wire them up as those land instead of faking functionality now.
 
+use crate::auth::AuthState;
 use adw::prelude::*;
 use gtk::gio;
 
-/// The built top bar, plus the widgets callers need to hook up behavior to
-/// (currently just the search entry; more will be added as buttons go live).
+/// The built top bar, plus the widgets callers need to hook up behavior to.
 pub struct TopBar {
     pub root: gtk::Box,
     pub search_entry: gtk::SearchEntry,
     pub home_button: gtk::Button,
+    /// Opens the account/login dialog on click — `window.rs` connects the
+    /// handler, since that's where `AuthManager` and the window's
+    /// `ToastOverlay` live.
+    pub account_button: gtk::Button,
 }
 
 pub fn build_top_bar() -> TopBar {
@@ -36,6 +40,7 @@ pub fn build_top_bar() -> TopBar {
         root,
         search_entry: center.search_entry,
         home_button: left.home_button,
+        account_button: right.account_button,
     }
 }
 
@@ -108,10 +113,13 @@ fn build_search_cluster() -> CenterCluster {
 
 struct RightCluster {
     root: gtk::Box,
+    account_button: gtk::Button,
 }
 
-/// Downloads status and account. Both disabled for now: downloads needs the
-/// offline-caching layer (Step 6), account needs auth (Step 7).
+/// Downloads status and account. Downloads stays disabled (needs the
+/// offline-caching layer, Step 6). Account is now live — clicking it opens
+/// the login dialog (`window.rs` wires the click handler, since it owns
+/// the `AuthManager` and `ToastOverlay` this needs).
 fn build_right_cluster() -> RightCluster {
     let root = gtk::Box::new(gtk::Orientation::Horizontal, 4);
 
@@ -122,17 +130,19 @@ fn build_right_cluster() -> RightCluster {
     downloads_button.set_sensitive(false); // TODO: enable once offline caching lands
 
     let avatar = adw::Avatar::new(28, None, true);
-    let account_button = gtk::MenuButton::new();
+    let account_button = gtk::Button::new();
     account_button.set_child(Some(&avatar));
     account_button.add_css_class("flat");
     account_button.add_css_class("circular");
-    account_button.set_tooltip_text(Some("Account"));
-    account_button.set_menu_model(Some(&account_menu()));
+    account_button.set_tooltip_text(Some("Account — not signed in"));
 
     root.append(&downloads_button);
     root.append(&account_button);
 
-    RightCluster { root }
+    RightCluster {
+        root,
+        account_button,
+    }
 }
 
 fn overflow_menu() -> gio::Menu {
@@ -143,8 +153,17 @@ fn overflow_menu() -> gio::Menu {
     menu
 }
 
-fn account_menu() -> gio::Menu {
-    let menu = gio::Menu::new();
-    menu.append(Some("Not signed in"), None); // TODO: real state once Step 7 (auth) lands
-    menu
+/// Reflects the current auth state on the account button's tooltip. Called
+/// once at startup with `AuthManager::current_state()`, and again from
+/// `window.rs`'s `on_state_changed` callback whenever `login_dialog`
+/// completes a login or logout.
+pub fn set_account_state(account_button: &gtk::Button, state: AuthState) {
+    match state {
+        AuthState::LoggedIn => {
+            account_button.set_tooltip_text(Some("Account — signed in"));
+        }
+        AuthState::LoggedOut => {
+            account_button.set_tooltip_text(Some("Account — not signed in"));
+        }
+    }
 }
