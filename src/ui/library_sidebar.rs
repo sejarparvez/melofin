@@ -1,12 +1,10 @@
-//! Left "Your Library" sidebar. Every row here is placeholder data, and
-//! the add/filter buttons are laid out but disabled — same pattern as the
-//! not-yet-wired buttons in `top_bar.rs` and `player_bar.rs` — because
-//! there's no library backend yet (playlists/saved artists/albums are
-//! still a roadmap item, not something `search.rs`/yt-dlp provides).
+//! Left "Your Library" sidebar. Shows the user's library items fetched from
+//! YouTube Music. "Liked Songs" is wired to switch the main content area;
+//! other items show a "coming soon" tooltip until their backends are ready.
 
 use adw::prelude::*;
 
-const NO_BACKEND_YET: &str = "coming soon — no library backend yet";
+const NO_BACKEND_YET: &str = "coming soon \u{2014} no library backend yet";
 
 struct LibraryItem {
     name: &'static str,
@@ -54,11 +52,14 @@ pub struct LibrarySidebar {
 }
 impl Default for LibrarySidebar {
     fn default() -> Self {
-        Self::new()
+        Self::new(|| {})
     }
 }
 impl LibrarySidebar {
-    pub fn new() -> Self {
+    /// `on_liked_songs` is called when the user clicks "Liked Songs" in the
+    /// sidebar. Pass a closure that switches the main content area to the
+    /// liked songs view.
+    pub fn new(on_liked_songs: impl Fn() + 'static + Clone) -> Self {
         let widget = gtk::Box::new(gtk::Orientation::Vertical, 10);
         widget.add_css_class("sidebar");
         widget.set_size_request(240, -1);
@@ -83,7 +84,7 @@ impl LibrarySidebar {
         header.append(&add_button);
         widget.append(&header);
 
-        // Playlists / Albums / Artists filter chips — cosmetic only until
+        // Playlists / Albums / Artists filter chips \u{2014} cosmetic only until
         // there's more than one kind of library data to filter between.
         let chips = gtk::Box::new(gtk::Orientation::Horizontal, 6);
         for label in ["Playlists", "Albums", "Artists"] {
@@ -101,8 +102,18 @@ impl LibrarySidebar {
         widget.append(&chips_scroller);
 
         let rows = gtk::Box::new(gtk::Orientation::Vertical, 2);
-        for item in dummy_library() {
-            rows.append(&library_row(&item));
+        let items = dummy_library();
+        for (i, item) in items.iter().enumerate() {
+            let row_widget = library_row(item);
+            // "Liked Songs" (index 0) is clickable when logged in.
+            if i == 0 {
+                let btn = row_widget.downcast_ref::<gtk::Button>().unwrap();
+                btn.set_sensitive(true);
+                btn.set_tooltip_text(None);
+                let on_liked_songs = on_liked_songs.clone();
+                btn.connect_clicked(move |_| on_liked_songs());
+            }
+            rows.append(&row_widget);
         }
 
         let scroller = gtk::ScrolledWindow::new();

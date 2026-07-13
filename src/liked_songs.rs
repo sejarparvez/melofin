@@ -1,0 +1,158 @@
+//! Fetches the user's liked songs from YouTube Music via the InnerTube API.
+//!
+//! Uses `browseId: "VLPLY_LIKE"` to get the liked songs playlist, then
+//! follows continuations to load all tracks. Returns a flat `Vec<Track>`
+//! that the UI can paginate through.
+
+use anyhow::{Context, Result};
+use std::path::Path;
+
+use crate::innertube::{browse_request, parse_song_item};
+use crate::search::Track;
+use crate::user::{build_cookie_header, extract_innertube_api_key};
+
+/// Fetches all liked songs from the user's YouTube Music account.
+///
+/// Blocking — call from a background thread.
+pub fn fetch_liked_songs(cookies_path: &Path) -> Result<Vec<Track>> {
+    let contents = std::fs::read_to_string(cookies_path).context("couldn't read cookies file")?;
+
+    let cookie_header = build_cookie_header(&contents);
+    anyhow::ensure!(
+        !cookie_header.is_empty(),
+        "cookie header is empty — not logged in?"
+    );
+
+    let html = ureq::get("https://music.youtube.com")
+        .set("Cookie", &cookie_header)
+        .set("User-Agent", crate::innertube::USER_AGENT)
+        .timeout(std::time::Duration::from_secs(15))
+        .call()
+        .context("failed to fetch music.youtube.com")?
+        .into_string()
+        .context("couldn't read YT Music HTML")?;
+
+    let api_key = extract_innertube_api_key(&html).context("couldn't find INNERTUBE_API_KEY")?;
+
+    // Initial browse for the liked songs playlist.
+    let initial = browse_request(&cookie_header, &api_key, Some("VLPLY_LIKE"), None)
+        .context("liked songs browse request failed")?;
+
+    let mut tracks = parse_music_shelf(&initial);
+
+    // Follow continuations.
+    let mut current_token = extract_continuation(&initial);
+    let max_pages = 50;
+    let mut page = 0;
+
+    while let Some(token) = current_token {
+        page += 1;
+        if page > max_pages {
+            break;
+        }
+
+        let response = browse_request(&cookie_header, &api_key, None, Some(&token))
+            .context("liked songs continuation failed")?;
+
+        let page_tracks = parse_music_shelf_continuation(&response);
+        let count = page_tracks.len();
+        tracks.extend(page_tracks);
+
+        current_token = extract_continuation(&response);
+
+        tracing::debug!(page, count, total = tracks.len(), "liked songs page");
+
+        if count == 0 {
+            break;
+        }
+    }
+
+    tracing::info!(total = tracks.len(), "fetched liked songs");
+    Ok(tracks)
+}
+
+/// Parses tracks from the initial browse response. Liked songs use
+/// `musicShelfRenderer` with `contents[].musicResponsiveListItemRenderer`.
+fn parse_music_shelf(json: &serde_json::Value) -> Vec<Track> {
+    // Try musicShelfRenderer first (liked songs playlist).
+    if let Some(shelf) = json.pointer("/contents/singleColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents/0/musicShelfRenderer") {
+        return parse_shelf_items(shelf);
+    }
+
+    // Fallback: musicResponsiveListItemRenderer in various paths.
+    let contents = json
+        .pointer("/contents/singleColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents")
+        .and_then(|c| c.as_array());
+
+    match contents {
+        Some(arr) => arr
+            .iter()
+            .filter_map(|item| item.get("musicShelfRenderer").map(parse_shelf_items))
+            .flatten()
+            .collect(),
+        None => Vec::new(),
+    }
+}
+
+/// Parses tracks from a continuation response.
+fn parse_music_shelf_continuation(json: &serde_json::Value) -> Vec<Track> {
+    // Continuation responses wrap in continuationContents.
+    if let Some(shelf) = json.pointer("/continuationContents/musicShelfContinuation") {
+        return parse_shelf_items(shelf);
+    }
+
+    // Some responses use sectionListContinuation.
+    let contents = json
+        .pointer("/continuationContents/sectionListContinuation/contents")
+        .and_then(|c| c.as_array());
+
+    match contents {
+        Some(arr) => arr
+            .iter()
+            .filter_map(|item| item.get("musicShelfRenderer").map(parse_shelf_items))
+            .flatten()
+            .collect(),
+        None => Vec::new(),
+    }
+}
+
+/// Extracts tracks from a `musicShelfRenderer`'s contents array.
+fn parse_shelf_items(shelf: &serde_json::Value) -> Vec<Track> {
+    shelf
+        .get("contents")
+        .and_then(|c| c.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|item| {
+                    item.get("musicResponsiveListItemRenderer")
+                        .and_then(parse_song_item)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Extracts the next continuation token from a response.
+fn extract_continuation(json: &serde_json::Value) -> Option<String> {
+    // Direct continuation in sectionListRenderer.
+    json.pointer("/contents/singleColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/continuations/0/nextContinuationData/continuation")
+        .and_then(|c| c.as_str())
+        .map(|s| s.to_string())
+        .or_else(|| {
+            // Continuation in musicShelfRenderer.
+            json.pointer("/contents/singleColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents/0/musicShelfRenderer/continuations/0/nextContinuationData/continuation")
+                .and_then(|c| c.as_str())
+                .map(|s| s.to_string())
+        })
+        .or_else(|| {
+            // Continuation in continuationContents.
+            json.pointer("/continuationContents/sectionListContinuation/continuations/0/nextContinuationData/continuation")
+                .and_then(|c| c.as_str())
+                .map(|s| s.to_string())
+        })
+        .or_else(|| {
+            json.pointer("/continuationContents/musicShelfContinuation/continuations/0/nextContinuationData/continuation")
+                .and_then(|c| c.as_str())
+                .map(|s| s.to_string())
+        })
+}

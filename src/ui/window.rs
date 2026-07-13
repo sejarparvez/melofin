@@ -1,6 +1,7 @@
 use crate::auth::{AuthManager, AuthState};
 use crate::player::{self, PlayerCommand};
 use crate::ui::home_view::HomeView;
+use crate::ui::liked_songs_view::LikedSongsView;
 use crate::ui::library_sidebar::LibrarySidebar;
 use crate::ui::login_dialog;
 use crate::ui::now_playing_panel::NowPlayingPanel;
@@ -142,25 +143,64 @@ fn build_ui(app: &adw::Application) {
     let home_cache_path = glib::user_cache_dir()
         .join("melofin")
         .join("home_feed.json");
+
+    // Content stack switches between home feed and liked songs view.
+    let content_stack = gtk::Stack::new();
+    content_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
+    content_stack.set_transition_duration(200);
+
     let home_view =
         HomeView::new(auth.cookies_path().to_path_buf(), home_cache_path, play_track.clone());
-    let search_view = SearchView::new(&top_bar.search_entry, play_track);
+    content_stack.add_named(&home_view.widget, Some("home"));
+    content_stack.set_visible_child(&home_view.widget);
+
+    let search_view = SearchView::new(&top_bar.search_entry, play_track.clone());
     let _search_view = search_view;
 
     let player_bar = PlayerBar::new(handle.commands.clone());
-    let library_sidebar = LibrarySidebar::new();
     let now_playing_panel = NowPlayingPanel::new();
+
+    // Library sidebar: "Liked Songs" click switches the stack.
+    // We create the sidebar after the stack so we can clone the stack into the callback.
+    let content_stack_for_sidebar = content_stack.clone();
+    let cookies_for_liked = auth.cookies_path().to_path_buf();
+    let library_sidebar = LibrarySidebar::new({
+        let stack = content_stack_for_sidebar.clone();
+        let cookies = cookies_for_liked.clone();
+        let play_track = play_track.clone();
+        move || {
+            // Create liked songs view on demand, add to stack, switch to it.
+            let stack = stack.clone();
+            let on_back = {
+                let stack = stack.clone();
+                move || {
+                    stack.set_visible_child_name("home");
+                }
+            };
+            let liked_view =
+                LikedSongsView::new(cookies.clone(), play_track.clone(), on_back);
+            liked_view.widget.set_hexpand(true);
+            liked_view.widget.set_vexpand(true);
+            // Remove old liked songs page if it exists.
+            if let Some(old) = stack.child_by_name("liked") {
+                stack.remove(&old);
+            }
+            stack.add_named(&liked_view.widget, Some("liked"));
+            stack.set_visible_child(&liked_view.widget);
+        }
+    });
+
+    content_stack.set_hexpand(true);
+    content_stack.set_vexpand(true);
 
     let middle_row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     middle_row.append(&library_sidebar.widget);
     middle_row.append(&gtk::Separator::new(gtk::Orientation::Vertical));
-    middle_row.append(&home_view.widget);
+    middle_row.append(&content_stack);
     middle_row.append(&gtk::Separator::new(gtk::Orientation::Vertical));
     middle_row.append(&now_playing_panel.widget);
     middle_row.set_hexpand(true);
     middle_row.set_vexpand(true);
-    home_view.widget.set_hexpand(true);
-    home_view.widget.set_vexpand(true);
 
     let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
     content.append(&top_bar.root);

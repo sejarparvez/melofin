@@ -12,7 +12,7 @@ use crate::home_feed::{HomeFeed, HomeSection};
 use crate::search::Track;
 use crate::user::{build_cookie_header, build_sapisidhash, extract_innertube_api_key};
 
-const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 \
+pub(crate) const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 \
                           (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 const CLIENT_VERSION: &str = "1.20250710.01.00";
@@ -49,8 +49,8 @@ pub fn browse_home(cookies_path: &Path) -> Result<HomeFeed> {
         extract_innertube_api_key(&html).context("couldn't find INNERTUBE_API_KEY in page HTML")?;
 
     // Step 1: initial browse — gets sections + continuation token.
-    let initial =
-        browse_request(&cookie_header, &api_key, None).context("initial browse request failed")?;
+    let initial = browse_request(&cookie_header, &api_key, None, None)
+        .context("initial browse request failed")?;
 
     // Collect sections from the initial response — it often already has
     // real carousel data before the continuation.
@@ -81,7 +81,7 @@ pub fn browse_home(cookies_path: &Path) -> Result<HomeFeed> {
             break;
         }
 
-        let cont_response = browse_request(&cookie_header, &api_key, Some(&token))
+        let cont_response = browse_request(&cookie_header, &api_key, None, Some(&token))
             .context("continuation browse request failed")?;
 
         let cont_sections = parse_continuation(&cont_response);
@@ -114,11 +114,16 @@ pub fn browse_home(cookies_path: &Path) -> Result<HomeFeed> {
     Ok(HomeFeed { sections })
 }
 
-/// Sends a POST to `/youtubei/v1/browse`. If `continuation` is `Some`, sends
-/// the continuation token instead of the `FEmusic_home` browse ID.
-fn browse_request(
+/// Sends a POST to `/youtubei/v1/browse`.
+///
+/// - If `continuation` is `Some`, sends the continuation token instead of a
+///   fresh browse ID.
+/// - Otherwise, sends `browse_id` if provided, or falls back to
+///   `FEmusic_home` (the personalized home feed) if `browse_id` is `None`.
+pub(crate) fn browse_request(
     cookie_header: &str,
     api_key: &str,
+    browse_id: Option<&str>,
     continuation: Option<&str>,
 ) -> Result<serde_json::Value> {
     let url =
@@ -146,7 +151,7 @@ fn browse_request(
                     "gl": "US"
                 }
             },
-            "browseId": "FEmusic_home"
+            "browseId": browse_id.unwrap_or("FEmusic_home")
         })
     };
 
@@ -249,8 +254,8 @@ fn parse_carousel(renderer: &serde_json::Value) -> Option<HomeSection> {
 }
 
 /// Parses a song from a `musicResponsiveListItemRenderer`. These appear in
-/// "Quick picks" and similar song-list sections.
-fn parse_song_item(renderer: &serde_json::Value) -> Option<Track> {
+/// "Quick picks", liked songs, and similar song-list sections.
+pub(crate) fn parse_song_item(renderer: &serde_json::Value) -> Option<Track> {
     let video_id = renderer.get("videoId")?.as_str()?;
 
     // Title is in the first flex column.
@@ -272,7 +277,7 @@ fn parse_song_item(renderer: &serde_json::Value) -> Option<Track> {
             // Skip album links (they have browseEndpoint with MPREb_ prefix).
             !run.pointer("/navigationEndpoint/browseEndpoint/browseId")
                 .and_then(|id| id.as_str())
-                .map_or(false, |id| id.starts_with("MPREb_"))
+                .is_some_and(|id| id.starts_with("MPREb_"))
         })?
         .get("text")?
         .as_str()?;
