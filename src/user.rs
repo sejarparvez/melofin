@@ -53,10 +53,9 @@ impl UserProfile {
             .split(';')
             .map(|c| c.trim().split('=').next().unwrap_or(""))
             .collect();
-        tracing::info!(cookie_count = cookie_names.len(), cookie_names = ?cookie_names, "cookies being sent");
+        tracing::debug!(cookie_count = cookie_names.len(), "sending cookies");
 
-        let ua = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 \
-                  (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+        let ua = crate::innertube::USER_AGENT;
 
         // Step 1: fetch the page HTML to get the innertube API key.
         let html = match ureq::get("https://music.youtube.com")
@@ -83,7 +82,7 @@ impl UserProfile {
 
         // Step 2: call the innertube browse API for structured data.
         if let Some(key) = &api_key
-            && let Some(profile) = fetch_profile_from_api(&cookie_header, ua, key)
+            && let Some(profile) = fetch_profile_from_api(&cookie_header, key)
         {
             return profile;
         }
@@ -128,6 +127,19 @@ pub fn build_cookie_header(contents: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join("; ")
+}
+
+/// Reads cookies from `cookies_path`, builds the HTTP header, and validates
+/// that at least one signed cookie is present.
+pub fn read_and_validate_cookies(cookies_path: &Path) -> Result<String> {
+    let contents = std::fs::read_to_string(cookies_path).context("couldn't read cookies file")?;
+    let cookie_header = build_cookie_header(&contents);
+    anyhow::ensure!(
+        !cookie_header.is_empty(),
+        "no signed cookies found in {}",
+        cookies_path.display()
+    );
+    Ok(cookie_header)
 }
 
 /// Extracts the `INNERTUBE_API_KEY` from a `ytcfg.set({...})` block in
@@ -185,24 +197,17 @@ pub fn build_sapisidhash(cookie_header: &str, origin: &str) -> Option<String> {
 
 /// Calls the YouTube Music innertube browse API and extracts user profile
 /// from the JSON response.
-fn fetch_profile_from_api(cookie_header: &str, ua: &str, api_key: &str) -> Option<UserProfile> {
-    let origin = "https://music.youtube.com";
-
+fn fetch_profile_from_api(cookie_header: &str, api_key: &str) -> Option<UserProfile> {
     // Try the account/account_menu endpoint — the actual endpoint YouTube Music's
     // web app uses to fetch user profile data (name, avatar, email).
-    if let Some(profile) = fetch_profile_from_account_menu(cookie_header, ua, api_key, origin) {
+    if let Some(profile) = fetch_profile_from_account_menu(cookie_header, api_key) {
         return Some(profile);
     }
 
     None
 }
 
-fn fetch_profile_from_account_menu(
-    cookie_header: &str,
-    ua: &str,
-    api_key: &str,
-    origin: &str,
-) -> Option<UserProfile> {
+fn fetch_profile_from_account_menu(cookie_header: &str, api_key: &str) -> Option<UserProfile> {
     let url = format!(
         "https://music.youtube.com/youtubei/v1/account/account_menu?key={api_key}&prettyPrint=false"
     );
@@ -211,7 +216,7 @@ fn fetch_profile_from_account_menu(
         "context": {
             "client": {
                 "clientName": "WEB_REMIX",
-                "clientVersion": "1.20250710.01.00",
+                "clientVersion": crate::innertube::CLIENT_VERSION,
                 "hl": "en",
                 "gl": "US"
             }
@@ -220,22 +225,9 @@ fn fetch_profile_from_account_menu(
 
     let body_str = body.to_string();
 
-    let mut req = ureq::post(&url)
-        .set("Cookie", cookie_header)
-        .set("User-Agent", ua)
-        .set("Content-Type", "application/json")
-        .set("X-Origin", origin)
-        .set("Referer", "https://music.youtube.com/")
-        .set("X-Goog-Api-Format-Version", "1")
-        .set("X-YouTube-Client-Name", "67")
-        .set("X-YouTube-Client-Version", "1.20250710.01.00")
-        .timeout(std::time::Duration::from_secs(10));
-
-    if let Some(auth) = build_sapisidhash(cookie_header, origin) {
-        req = req.set("Authorization", &auth);
-    }
-
-    let response = match req.send_string(&body_str) {
+    let response = match crate::innertube::build_innertube_request(&url, cookie_header)
+        .send_string(&body_str)
+    {
         Ok(r) => r,
         Err(e) => {
             tracing::warn!("account_menu API failed: {e}");

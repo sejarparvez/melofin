@@ -150,10 +150,7 @@ impl AuthManager {
     /// Imports cookies read by `rookie` from the user's browser, converts
     /// them to Netscape format, writes the file, and validates. Rolls back
     /// on validation failure, same as `import_cookies_file`.
-    pub async fn import_cookies_from_rookie(
-        &self,
-        cookies: Vec<RookieCookie>,
-    ) -> Result<()> {
+    pub async fn import_cookies_from_rookie(&self, cookies: Vec<RookieCookie>) -> Result<()> {
         if cookies.is_empty() {
             bail!("no cookies returned from browser — are you logged into YouTube Music?");
         }

@@ -11,18 +11,22 @@
 - **Playback**: Long-lived headless `mpv` process controlled via JSON IPC socket.
   - Play/pause, seek (absolute/relative), volume.
   - Gapless-ready architecture.
+- **Home Feed**: Personalized InnerTube feed (when logged in) with yt-dlp fallback.
+- **Liked Songs**: Paginated liked songs from InnerTube API.
+- **Auth**: Cookie-based authentication (browser auto-import via `rookie` or manual file picker).
 - **UI** (GTK4 + libadwaita):
   - Clean Adwaita window (optimized for tiling).
-  - Top bar with search entry + overflow menu (Quit, About).
-  - Search results view.
+  - Top bar with search entry + overflow menu + account popover.
+  - Search results view with debounced input and skeleton loading.
   - Bottom player bar with progress/seek, controls, and live updates.
+  - Left sidebar ("Your Library") with navigation.
+  - Right "Now Playing" panel.
 - **Desktop Integration**:
   - Full MPRIS server (`playerctl`, media keys, waybar, GNOME/KDE widgets work).
   - Background player thread with async channels for clean UI ↔ Player separation.
 - **Developer Experience**:
-  - Multiple binaries: `melofin` (full app), `search-test`, `ui-shell`.
   - Tracing logs, dotenv support, proper error handling.
-  - Unit tests for search parsing.
+  - Unit tests for search parsing, auth, user profile, and cache logic.
 
 ### Architecture Overview
 
@@ -49,15 +53,17 @@ UI (GTK4/Adwaita)  ↔  async-channel  ↔  Player Service (tokio thread)
 | Playback  | mpv (subprocess + JSON IPC) | Reliable, high quality |
 | System Integration | mpris-server | Media controls |
 | Search    | yt-dlp | Simple & effective |
+| Home Feed | InnerTube API + yt-dlp fallback | Personalized when logged in |
+| Auth      | rookie (browser cookie import) | No OAuth needed |
 | Async     | tokio + async-channel | - |
 | Logging   | tracing + tracing-subscriber | - |
 
-**Not yet implemented** (per original roadmap):
-- rustypipe / official InnerTube integration
+**Not yet implemented** (per roadmap):
 - Queue / playlists / library management
 - SQLite persistence / offline cache
-- Account sync / auth
-- Lyrics, home feed, advanced browsing
+- Lyrics panel
+- Mini player / fullscreen
+- Preferences dialog
 
 ---
 
@@ -78,13 +84,7 @@ sudo apt install mpv yt-dlp libgtk-4-dev libadwaita-1-dev
 ```bash
 git clone https://github.com/sejarparvez/melofin.git
 cd melofin
-
-# Full application
 cargo run
-
-# Or specific binaries
-cargo run --bin search-test -- "lofi beats"
-cargo run --bin ui-shell
 ```
 
 ### Environment Variables
@@ -108,29 +108,42 @@ RUST_LOG=debug cargo run
 
 ```
 src/
-├── lib.rs
-├── main.rs                 # Full app entry (CLI fallback + GUI)
-├── bin/
-│   ├── search_test.rs
-│   └── ui_shell.rs
-├── search.rs               # yt-dlp + parser + tests
-├── mpv.rs                  # IPC controller
-├── player.rs               # Background service + state
-├── mpris.rs                # MPRIS integration
+├── lib.rs                  # Library root — re-exports all modules
+├── main.rs                 # Entry point — tracing init + runs UI
+├── auth.rs                 # Cookie-based YT Music auth
+├── home_feed.rs            # Home feed: InnerTube + yt-dlp fallback
+├── innertube.rs            # InnerTube browse API client
+├── liked_songs.rs          # Liked songs via InnerTube browse
+├── mpris.rs                # MPRIS server + media controls
+├── mpv.rs                  # mpv IPC controller
+├── player.rs               # Background player thread + channels
+├── search.rs               # yt-dlp search + output parser
+├── thumbnail.rs            # Thumbnail fetcher with disk cache
+├── user.rs                 # User profile + cookie/auth helpers
 └── ui/
-    ├── window.rs
-    ├── top_bar.rs
-    ├── search_view.rs
-    └── player_bar.rs
+    ├── mod.rs              # UI module root
+    ├── window.rs           # Main window + app lifecycle
+    ├── top_bar.rs          # Top bar: search, overflow menu, account
+    ├── search_view.rs      # Search results with debounce + skeleton loading
+    ├── player_bar.rs       # Bottom player bar (Spotify-style)
+    ├── home_view.rs        # Home page with hero card + scrollable rows
+    ├── library_sidebar.rs  # Left sidebar ("Your Library")
+    ├── liked_songs_view.rs # Liked Songs page with lazy pagination
+    ├── now_playing_panel.rs# Right "Now Playing" panel
+    ├── login_dialog.rs     # Cookie import dialog
+    ├── thumbnail_widget.rs # Shared fetch/decode/scale/crop pipeline
+    └── style.css           # Dark theme CSS
 ```
 
 ## Roadmap (Next Steps)
 
-- Polish current implementation (UI/UX, stability, error handling)
-- Add queue management
-- Integrate rustypipe for richer metadata & features
-- Persistence (SQLite)
-- Advanced features (offline, library, etc.)
+- Queue management
+- Library backend (playlists, albums, artists)
+- SQLite persistence / offline cache
+- Lyrics panel
+- Mini player / fullscreen
+- Preferences dialog
+- Flatpak packaging
 
 ## Contributing
 

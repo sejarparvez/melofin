@@ -4,6 +4,7 @@ pub mod innertube;
 pub mod liked_songs;
 pub mod mpris;
 pub mod mpv;
+pub mod play_history;
 pub mod player;
 pub mod search;
 pub mod thumbnail;

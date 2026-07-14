@@ -14,10 +14,14 @@
 //! dimensions already equal the widget's intended size — there's no
 //! size-negotiation left for GTK to get wrong.
 
+use adw::prelude::*;
 use gtk::gdk_pixbuf::{InterpType, Pixbuf};
 use gtk::gio::{Cancellable, MemoryInputStream};
 use gtk::glib;
+use std::cell::RefCell;
 use std::thread;
+
+use crate::search::Track;
 
 /// Fetches `url` on a background thread (disk-cached — see
 /// `crate::thumbnail::fetch`), then decodes and scales+center-crops it to
@@ -69,4 +73,83 @@ fn decode_and_crop(bytes: &[u8], size: i32) -> Option<Pixbuf> {
     let x = (scaled_w - crop_w) / 2;
     let y = (scaled_h - crop_h) / 2;
     Some(scaled.new_subpixbuf(x, y, crop_w, crop_h))
+}
+
+/// A `gtk::Stack` that shows either a placeholder icon or a fetched
+/// thumbnail, with built-in deduplication — `update()` only fetches when
+/// the URL actually changes. Used by `PlayerBar` and `NowPlayingPanel`.
+pub struct ThumbnailStack {
+    stack: gtk::Stack,
+    picture: gtk::Picture,
+    current_url: RefCell<String>,
+}
+
+impl ThumbnailStack {
+    pub fn new(placeholder_icon: &str, pixel_size: i32, size: i32) -> Self {
+        let stack = gtk::Stack::new();
+        let icon = gtk::Image::from_icon_name(placeholder_icon);
+        icon.set_pixel_size(pixel_size);
+        icon.set_halign(gtk::Align::Center);
+        icon.set_valign(gtk::Align::Center);
+        stack.add_named(&icon, Some("placeholder"));
+
+        let picture = gtk::Picture::new();
+        picture.set_content_fit(gtk::ContentFit::Cover);
+        picture.set_size_request(size, size);
+        stack.add_named(&picture, Some("art"));
+        stack.set_visible_child_name("placeholder");
+
+        Self {
+            stack,
+            picture,
+            current_url: RefCell::new(String::new()),
+        }
+    }
+
+    pub fn widget(&self) -> &gtk::Stack {
+        &self.stack
+    }
+
+    /// Updates the thumbnail. Only fetches if `url` differs from the
+    /// currently displayed one. Pass `size` as the fetch/crop target
+    /// (typically the same value passed to `new`).
+    pub fn update(&self, url: &str, size: i32) {
+        if *self.current_url.borrow() == url {
+            return;
+        }
+        *self.current_url.borrow_mut() = url.to_string();
+        if url.is_empty() {
+            self.stack.set_visible_child_name("placeholder");
+        } else {
+            let stack = self.stack.clone();
+            let picture = self.picture.clone();
+            spawn_fetch(url.to_string(), size, move |texture| {
+                picture.set_paintable(Some(&texture));
+                stack.set_visible_child_name("art");
+            });
+        }
+    }
+}
+
+/// Builds an `adw::ActionRow` for a track with a thumbnail prefix,
+/// title, subtitle, and activatable state. Used by both `search_view`
+/// and `liked_songs_view`.
+pub fn build_track_row(track: &Track) -> adw::ActionRow {
+    let row = adw::ActionRow::new();
+    row.set_title(&glib::markup_escape_text(&track.title));
+    row.set_subtitle(&glib::markup_escape_text(&track.artist));
+    row.set_activatable(true);
+
+    let thumbnail = gtk::Picture::new();
+    thumbnail.set_size_request(40, 40);
+    thumbnail.set_content_fit(gtk::ContentFit::Cover);
+    row.add_prefix(&thumbnail);
+    if !track.thumbnail_url.is_empty() {
+        let url = track.thumbnail_url.clone();
+        spawn_fetch(url, 40, move |texture| {
+            thumbnail.set_paintable(Some(&texture));
+        });
+    }
+
+    row
 }

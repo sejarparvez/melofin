@@ -1,8 +1,8 @@
 use crate::auth::{AuthManager, AuthState};
 use crate::player::{self, PlayerCommand};
 use crate::ui::home_view::HomeView;
-use crate::ui::liked_songs_view::LikedSongsView;
 use crate::ui::library_sidebar::LibrarySidebar;
+use crate::ui::liked_songs_view::LikedSongsView;
 use crate::ui::login_dialog;
 use crate::ui::now_playing_panel::NowPlayingPanel;
 use crate::ui::player_bar::PlayerBar;
@@ -103,28 +103,31 @@ fn build_ui(app: &adw::Application) {
         let auth = auth.clone();
         let data_dir = data_dir.clone();
         let top_bar = top_bar.clone();
-        top_bar.logout_button.clone().connect_clicked(move |button| {
-            button.set_sensitive(false);
-            let auth = auth.clone();
-            let data_dir = data_dir.clone();
-            let top_bar = top_bar.clone();
-            let button = button.clone();
-            login_dialog::run_auth(
-                move || {
-                    let auth = auth.clone();
-                    async move { auth.logout().await }
-                },
-                move |result| {
-                    button.set_sensitive(true);
-                    if let Err(e) = result {
-                        tracing::warn!("logout failed: {e}");
-                        return;
-                    }
-                    UserProfile::remove_cache(&data_dir);
-                    top_bar.set_logged_out();
-                },
-            );
-        });
+        top_bar
+            .logout_button
+            .clone()
+            .connect_clicked(move |button| {
+                button.set_sensitive(false);
+                let auth = auth.clone();
+                let data_dir = data_dir.clone();
+                let top_bar = top_bar.clone();
+                let button = button.clone();
+                login_dialog::run_auth(
+                    move || {
+                        let auth = auth.clone();
+                        async move { auth.logout().await }
+                    },
+                    move |result| {
+                        button.set_sensitive(true);
+                        if let Err(e) = result {
+                            tracing::warn!("logout failed: {e}");
+                            return;
+                        }
+                        UserProfile::remove_cache(&data_dir);
+                        top_bar.set_logged_out();
+                    },
+                );
+            });
     }
 
     // -- Build the rest of the window ------------------------------------------
@@ -144,13 +147,21 @@ fn build_ui(app: &adw::Application) {
         .join("melofin")
         .join("home_feed.json");
 
+    let history_path = glib::user_data_dir()
+        .join("melofin")
+        .join("play_history.jsonl");
+
     // Content stack switches between home feed and liked songs view.
     let content_stack = gtk::Stack::new();
     content_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
     content_stack.set_transition_duration(200);
 
-    let home_view =
-        HomeView::new(auth.cookies_path().to_path_buf(), home_cache_path, play_track.clone());
+    let home_view = HomeView::new(
+        auth.cookies_path().to_path_buf(),
+        home_cache_path,
+        history_path,
+        play_track.clone(),
+    );
     content_stack.add_named(&home_view.widget, Some("home"));
     content_stack.set_visible_child(&home_view.widget);
 
@@ -177,8 +188,7 @@ fn build_ui(app: &adw::Application) {
                     stack.set_visible_child_name("home");
                 }
             };
-            let liked_view =
-                LikedSongsView::new(cookies.clone(), play_track.clone(), on_back);
+            let liked_view = LikedSongsView::new(cookies.clone(), play_track.clone(), on_back);
             liked_view.widget.set_hexpand(true);
             liked_view.widget.set_vexpand(true);
             // Remove old liked songs page if it exists.

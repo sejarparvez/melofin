@@ -31,6 +31,7 @@ impl HomeView {
     pub fn new(
         cookies_path: PathBuf,
         cache_path: PathBuf,
+        history_path: PathBuf,
         on_select: impl Fn(Track) + 'static + Clone,
     ) -> Self {
         let content = gtk::Box::new(gtk::Orientation::Vertical, 24);
@@ -48,7 +49,13 @@ impl HomeView {
         feed_container.append(&loading_state());
         content.append(&feed_container);
 
-        load_feed(feed_container, cookies_path, cache_path, on_select);
+        load_feed(
+            feed_container,
+            cookies_path,
+            cache_path,
+            history_path,
+            on_select,
+        );
 
         let widget = gtk::ScrolledWindow::new();
         widget.set_vexpand(true);
@@ -70,14 +77,17 @@ fn load_feed(
     container: gtk::Box,
     cookies_path: PathBuf,
     cache_path: PathBuf,
+    history_path: PathBuf,
     on_select: impl Fn(Track) + 'static + Clone,
 ) {
     let (sender, receiver) = async_channel::bounded::<HomeFeed>(1);
     let cookies = cookies_path.clone();
     let cache = cache_path.clone();
+    let history = history_path.clone();
     std::thread::spawn(move || {
-        let _ = sender
-            .send_blocking(crate::home_feed::fetch_home_feed(&cookies, &cache));
+        let _ = sender.send_blocking(crate::home_feed::fetch_home_feed(
+            &cookies, &cache, &history,
+        ));
     });
 
     glib::spawn_future_local(async move {
@@ -87,7 +97,13 @@ fn load_feed(
         clear(&container);
 
         if feed.sections.is_empty() {
-            container.append(&error_state(container.clone(), cookies_path, cache_path, on_select));
+            container.append(&error_state(
+                container.clone(),
+                cookies_path,
+                cache_path,
+                history_path,
+                on_select,
+            ));
             return;
         }
 
@@ -145,6 +161,7 @@ fn error_state(
     container: gtk::Box,
     cookies_path: PathBuf,
     cache_path: PathBuf,
+    history_path: PathBuf,
     on_select: impl Fn(Track) + 'static + Clone,
 ) -> gtk::Widget {
     let box_ = gtk::Box::new(gtk::Orientation::Vertical, 12);
@@ -169,6 +186,7 @@ fn error_state(
             container.clone(),
             cookies_path.clone(),
             cache_path.clone(),
+            history_path.clone(),
             on_select.clone(),
         );
     });

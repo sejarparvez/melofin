@@ -153,8 +153,7 @@ impl LikedSongsView {
                     show_more_clone.set_visible(has_more);
                 }
                 Err(e) => {
-                    let label =
-                        gtk::Label::new(Some(&format!("Failed to load liked songs: {e}")));
+                    let label = gtk::Label::new(Some(&format!("Failed to load liked songs: {e}")));
                     label.add_css_class("dim-label");
                     label.set_wrap(true);
                     list_clone.append(&label);
@@ -179,23 +178,7 @@ fn append_page(
     let end = (start + PAGE_SIZE).min(tracks.len());
 
     for track in tracks[start..end].iter() {
-        let row = adw::ActionRow::new();
-        row.set_title(&glib::markup_escape_text(&track.title));
-        row.set_subtitle(&glib::markup_escape_text(&track.artist));
-        row.set_activatable(true);
-
-        let thumbnail = gtk::Picture::new();
-        thumbnail.set_size_request(40, 40);
-        thumbnail.set_content_fit(gtk::ContentFit::Cover);
-        row.add_prefix(&thumbnail);
-        if !track.thumbnail_url.is_empty() {
-            let url = track.thumbnail_url.clone();
-            thumbnail_widget::spawn_fetch(url, 40, move |texture| {
-                thumbnail.set_paintable(Some(&texture))
-            });
-        }
-
-        list.append(&row);
+        list.append(&thumbnail_widget::build_track_row(track));
     }
 
     drop(tracks);

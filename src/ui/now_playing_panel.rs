@@ -22,9 +22,8 @@
 //! wrapping/ellipsizing within that fixed viewport) instead of growing.
 
 use crate::player::PlayerState;
-use crate::ui::thumbnail_widget;
+use crate::ui::thumbnail_widget::ThumbnailStack;
 use adw::prelude::*;
-use std::cell::RefCell;
 
 /// Fixed width of the whole panel, in pixels. Every other size in here
 /// (`ART_SIZE`, the label `max_width_chars` calls) is derived from this
@@ -38,9 +37,7 @@ pub struct NowPlayingPanel {
     pub widget: gtk::ScrolledWindow,
     title_label: gtk::Label,
     artist_label: gtk::Label,
-    art_stack: gtk::Stack,
-    art_picture: gtk::Picture,
-    current_thumbnail_url: RefCell<String>,
+    thumbnail: ThumbnailStack,
 }
 
 impl Default for NowPlayingPanel {
@@ -62,26 +59,13 @@ impl NowPlayingPanel {
         heading.set_halign(gtk::Align::Start);
         content.append(&heading);
 
-        // Same placeholder/art `Stack` swap pattern as `player_bar.rs`'s
-        // album art tile, just bigger.
+        let thumbnail = ThumbnailStack::new("emblem-music-symbolic", 48, ART_SIZE);
         let art_frame = gtk::Frame::new(None);
         art_frame.add_css_class("card");
         art_frame.add_css_class("home-art");
         art_frame.set_size_request(ART_SIZE, ART_SIZE);
         art_frame.set_hexpand(false);
-
-        let art_stack = gtk::Stack::new();
-        let placeholder_icon = gtk::Image::from_icon_name("emblem-music-symbolic");
-        placeholder_icon.set_pixel_size(48);
-        placeholder_icon.set_halign(gtk::Align::Center);
-        placeholder_icon.set_valign(gtk::Align::Center);
-        art_stack.add_named(&placeholder_icon, Some("placeholder"));
-
-        let art_picture = gtk::Picture::new();
-        art_picture.set_content_fit(gtk::ContentFit::Cover);
-        art_stack.add_named(&art_picture, Some("art"));
-        art_stack.set_visible_child_name("placeholder");
-        art_frame.set_child(Some(&art_stack));
+        art_frame.set_child(Some(thumbnail.widget()));
         content.append(&art_frame);
 
         let title_label = gtk::Label::new(Some("Nothing playing"));
@@ -146,9 +130,7 @@ impl NowPlayingPanel {
             widget,
             title_label,
             artist_label,
-            art_stack,
-            art_picture,
-            current_thumbnail_url: RefCell::new(String::new()),
+            thumbnail,
         }
     }
 
@@ -162,23 +144,6 @@ impl NowPlayingPanel {
         };
         self.title_label.set_label(title);
         self.artist_label.set_label(&state.artist);
-
-        if *self.current_thumbnail_url.borrow() != state.thumbnail_url {
-            *self.current_thumbnail_url.borrow_mut() = state.thumbnail_url.clone();
-            if state.thumbnail_url.is_empty() {
-                self.art_stack.set_visible_child_name("placeholder");
-            } else {
-                let art_stack = self.art_stack.clone();
-                let art_picture = self.art_picture.clone();
-                thumbnail_widget::spawn_fetch(
-                    state.thumbnail_url.clone(),
-                    ART_SIZE,
-                    move |texture| {
-                        art_picture.set_paintable(Some(&texture));
-                        art_stack.set_visible_child_name("art");
-                    },
-                );
-            }
-        }
+        self.thumbnail.update(&state.thumbnail_url, ART_SIZE);
     }
 }

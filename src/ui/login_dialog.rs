@@ -98,24 +98,21 @@ fn build_login_form(
                             auth.import_cookies_from_rookie(cookies).await
                         }
                     },
-                    move |result| {
-                        match result {
-                            Ok(()) => {
-                                on_state_changed(AuthState::LoggedIn);
-                                if let Some(w) =
-                                    button.root().and_then(|r| r.downcast::<adw::Window>().ok())
-                                {
-                                    w.close();
-                                }
-                                toast_overlay.add_toast(adw::Toast::new("Logged in"));
+                    move |result| match result {
+                        Ok(()) => {
+                            on_state_changed(AuthState::LoggedIn);
+                            if let Some(w) =
+                                button.root().and_then(|r| r.downcast::<adw::Window>().ok())
+                            {
+                                w.close();
                             }
-                            Err(e) => {
-                                button.set_sensitive(true);
-                                button.set_label(&format!("Import from {browser_label}"));
-                                toast_overlay.add_toast(adw::Toast::new(&format!(
-                                    "Couldn't import: {e}"
-                                )));
-                            }
+                            toast_overlay.add_toast(adw::Toast::new("Logged in"));
+                        }
+                        Err(e) => {
+                            button.set_sensitive(true);
+                            button.set_label(&format!("Import from {browser_label}"));
+                            toast_overlay
+                                .add_toast(adw::Toast::new(&format!("Couldn't import: {e}")));
                         }
                     },
                 );

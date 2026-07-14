@@ -9,19 +9,13 @@ use std::path::Path;
 
 use crate::innertube::{browse_request, parse_song_item};
 use crate::search::Track;
-use crate::user::{build_cookie_header, extract_innertube_api_key};
+use crate::user::{extract_innertube_api_key, read_and_validate_cookies};
 
 /// Fetches all liked songs from the user's YouTube Music account.
 ///
 /// Blocking — call from a background thread.
 pub fn fetch_liked_songs(cookies_path: &Path) -> Result<Vec<Track>> {
-    let contents = std::fs::read_to_string(cookies_path).context("couldn't read cookies file")?;
-
-    let cookie_header = build_cookie_header(&contents);
-    anyhow::ensure!(
-        !cookie_header.is_empty(),
-        "cookie header is empty — not logged in?"
-    );
+    let cookie_header = read_and_validate_cookies(cookies_path)?;
 
     let html = ureq::get("https://music.youtube.com")
         .set("Cookie", &cookie_header)

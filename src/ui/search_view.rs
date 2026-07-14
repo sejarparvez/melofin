@@ -132,28 +132,7 @@ impl SearchView {
                         }
                         Ok(tracks) => {
                             for track in &tracks {
-                                let row = adw::ActionRow::new();
-                                // Title/subtitle are parsed as Pango markup, so raw
-                                // "&"/"<" in a video title (common in mashup/remix
-                                // titles) would otherwise break parsing.
-                                row.set_title(&glib::markup_escape_text(&track.title));
-                                row.set_subtitle(&glib::markup_escape_text(&track.artist));
-                                // ActionRow defaults to non-activatable.
-                                row.set_activatable(true);
-
-                                let thumbnail = gtk::Picture::new();
-                                thumbnail.set_size_request(40, 40);
-                                thumbnail.set_content_fit(gtk::ContentFit::Cover);
-                                row.add_prefix(&thumbnail);
-                                if !track.thumbnail_url.is_empty() {
-                                    thumbnail_widget::spawn_fetch(
-                                        track.thumbnail_url.clone(),
-                                        40,
-                                        move |texture| thumbnail.set_paintable(Some(&texture)),
-                                    );
-                                }
-
-                                list.append(&row);
+                                list.append(&thumbnail_widget::build_track_row(track));
                             }
                             *tracks_slot.borrow_mut() = tracks;
                         }

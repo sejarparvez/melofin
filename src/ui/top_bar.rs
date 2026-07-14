@@ -43,8 +43,15 @@ pub fn build_top_bar() -> TopBar {
 
     let left = build_left_cluster();
     let center = build_search_cluster();
-    let (right_root, right_btn, popover_name, popover_email, popover_avatar, logout_button, login_button) =
-        build_right_cluster();
+    let (
+        right_root,
+        right_btn,
+        popover_name,
+        popover_email,
+        popover_avatar,
+        logout_button,
+        login_button,
+    ) = build_right_cluster();
 
     root.append(&left.root);
     root.append(&center.root);
@@ -74,7 +81,8 @@ impl TopBar {
         self.popover_email.set_visible(false);
         self.logout_button.set_visible(false);
         self.login_button.set_visible(true);
-        self.account_button.set_tooltip_text(Some("Account — not signed in"));
+        self.account_button
+            .set_tooltip_text(Some("Account — not signed in"));
     }
 
     /// Updates the popover with the given profile: avatar initial, name,

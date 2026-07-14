@@ -106,6 +106,28 @@ async fn run(
                             tracing::warn!("mpv load failed: {e}");
                             continue;
                         }
+
+                        // Record play event for history tracking.
+                        let history_path = std::env::var("HOME")
+                            .ok()
+                            .map(std::path::PathBuf::from)
+                            .unwrap_or_else(|| std::path::PathBuf::from("."))
+                            .join(".local/share/melofin/play_history.jsonl");
+                        let event = crate::play_history::PlayEvent {
+                            video_id: crate::play_history::video_id_from_url(&track.url)
+                                .unwrap_or_default(),
+                            title: track.title.clone(),
+                            artist: track.artist.clone(),
+                            thumbnail_url: track.thumbnail_url.clone(),
+                            timestamp: std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_secs(),
+                            duration_played: 0.0,
+                            duration_total: 0.0,
+                        };
+                        crate::play_history::append_event(&history_path, &event);
+
                         let _ = state_tx
                             .send(PlayerState {
                                 title: track.title,

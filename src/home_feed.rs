@@ -13,8 +13,10 @@
 //! shape both the InnerTube feed and the yt-dlp fallback produce — so
 //! the UI that renders it doesn't care which source provided the data.
 
+use crate::play_history;
 use crate::search::{self, Track};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::Path;
 
 /// One titled, horizontally-scrolling row on the home page.
@@ -58,19 +60,20 @@ const SECTIONS: &[(&str, &str)] = &[
 
 /// Fetches the home feed with disk caching. When `cookies_path` points to
 /// a valid cookies file (user is logged in), calls the InnerTube
-/// `FEmusic_home` browse endpoint for a real personalized feed. Falls back
-/// to unpersonalized `yt-dlp` searches when InnerTube fails or when no
-/// cookies exist.
+/// `FEmusic_home` browse endpoint (plus extra browse IDs like charts, new
+/// releases) for a real personalized feed. Falls back to unpersonalized
+/// `yt-dlp` searches when InnerTube fails or when no cookies exist.
+///
+/// Merges local play history sections ("Recently Played", "Top Tracks")
+/// into the feed and deduplicates across all sections.
 ///
 /// Caches the result to `cache_path` as JSON. On subsequent calls, returns
 /// the cached feed if it's less than 30 minutes old, avoiding a network
-/// round-trip. Stale caches are refreshed in the background (the caller
-/// gets the stale data immediately and the fresh data replaces it on the
-/// next load).
+/// round-trip.
 ///
 /// Blocking: makes HTTP requests or shells out to `yt-dlp`. Call from a
 /// background thread, never from the GTK main thread.
-pub fn fetch_home_feed(cookies_path: &Path, cache_path: &Path) -> HomeFeed {
+pub fn fetch_home_feed(cookies_path: &Path, cache_path: &Path, history_path: &Path) -> HomeFeed {
     // Try cache first.
     if let Some(cached) = load_cache(cache_path) {
         tracing::info!(
@@ -81,7 +84,10 @@ pub fn fetch_home_feed(cookies_path: &Path, cache_path: &Path) -> HomeFeed {
     }
 
     // Cache miss or stale — fetch fresh data.
-    let feed = fetch_fresh_feed(cookies_path);
+    let mut feed = fetch_fresh_feed(cookies_path);
+
+    // Merge local play history sections.
+    merge_local_sections(&mut feed, history_path);
 
     // Save to cache (best-effort — don't fail the feed if caching breaks).
     if !feed.sections.is_empty() {
@@ -115,6 +121,76 @@ fn fetch_fresh_feed(cookies_path: &Path) -> HomeFeed {
     // Fallback: unpersonalized yt-dlp search rows.
     tracing::info!("using yt-dlp fallback feed");
     fetch_ytdlp_feed()
+}
+
+/// Merges "Recently Played" and "Top Tracks" sections from local play
+/// history into the feed, then deduplicates across all sections so no
+/// track appears twice.
+fn merge_local_sections(feed: &mut HomeFeed, history_path: &Path) {
+    let events = play_history::load_history(history_path);
+    if events.is_empty() {
+        return;
+    }
+
+    let recently = play_history::recently_played(&events, 20);
+    if !recently.is_empty() {
+        feed.sections.insert(
+            0,
+            HomeSection {
+                title: "Recently Played".into(),
+                tracks: recently,
+            },
+        );
+    }
+
+    let top = play_history::top_tracks(&events, 20);
+    if !top.is_empty() {
+        let pos = if feed
+            .sections
+            .first()
+            .is_some_and(|s| s.title == "Recently Played")
+        {
+            1
+        } else {
+            0
+        };
+        feed.sections.insert(
+            pos,
+            HomeSection {
+                title: "Top Tracks".into(),
+                tracks: top,
+            },
+        );
+    }
+
+    // Deduplicate: collect all video_ids from local sections, then remove
+    // duplicates from InnerTube sections.
+    let local_ids: HashSet<String> = feed
+        .sections
+        .iter()
+        .take_while(|s| s.title == "Recently Played" || s.title == "Top Tracks")
+        .flat_map(|s| s.tracks.iter())
+        .filter_map(|t| play_history::video_id_from_url(&t.url))
+        .collect();
+
+    if !local_ids.is_empty() {
+        dedup_video_ids(&local_ids, &mut feed.sections);
+    }
+}
+
+/// Removes tracks from non-local sections whose video_id appears in
+/// `local_ids`. Also removes any sections that become empty.
+fn dedup_video_ids(local_ids: &HashSet<String>, sections: &mut Vec<HomeSection>) {
+    for section in sections.iter_mut() {
+        // Skip local sections — don't dedup within "Recently Played" etc.
+        if section.title == "Recently Played" || section.title == "Top Tracks" {
+            continue;
+        }
+        section.tracks.retain(|t| {
+            play_history::video_id_from_url(&t.url).is_none_or(|id| !local_ids.contains(&id))
+        });
+    }
+    sections.retain(|s| !s.tracks.is_empty());
 }
 
 /// Loads a cached feed from disk. Returns `None` if the file doesn't exist,
@@ -210,27 +286,22 @@ mod tests {
     use std::io::Write;
 
     use super::{HomeFeed, HomeSection, load_cache, save_cache};
-    use crate::user::{build_cookie_header, build_sapisidhash};
+    use crate::innertube::build_innertube_request;
+    use crate::user::read_and_validate_cookies;
 
     /// Probe the InnerTube browse endpoint and dump the raw response.
-    /// Run with: cargo test probe_browse -- --nocapture
+    /// Run with: cargo test probe_browse -- --ignored --nocapture
     #[test]
+    #[ignore]
     fn probe_browse() {
         let cookies_path =
             std::path::PathBuf::from(std::env::var("HOME").expect("no HOME env var"))
                 .join(".local/share/melofin/cookies.txt");
 
-        let contents = std::fs::read_to_string(&cookies_path)
+        let cookie_header = read_and_validate_cookies(&cookies_path)
             .expect("couldn't read cookies.txt — are you logged in?");
 
-        let cookie_header = build_cookie_header(&contents);
-        assert!(
-            !cookie_header.is_empty(),
-            "cookie header is empty — cookies.txt malformed?"
-        );
-
-        let ua = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 \
-                  (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+        let ua = crate::innertube::USER_AGENT;
 
         // Step 1: fetch page to get API key
         let html = ureq::get("https://music.youtube.com")
@@ -246,7 +317,6 @@ mod tests {
         eprintln!("API key: {api_key}");
 
         // Step 2: call the browse endpoint
-        let origin = "https://music.youtube.com";
         let url =
             format!("https://music.youtube.com/youtubei/v1/browse?key={api_key}&prettyPrint=false");
 
@@ -254,7 +324,7 @@ mod tests {
             "context": {
                 "client": {
                     "clientName": "WEB_REMIX",
-                    "clientVersion": "1.20250710.01.00",
+                    "clientVersion": crate::innertube::CLIENT_VERSION,
                     "hl": "en",
                     "gl": "US"
                 }
@@ -265,23 +335,7 @@ mod tests {
         let body_str = body.to_string();
         eprintln!("Request body: {body_str}");
 
-        let mut req = ureq::post(&url)
-            .set("Cookie", &cookie_header)
-            .set("User-Agent", ua)
-            .set("Content-Type", "application/json")
-            .set("X-Origin", origin)
-            .set("Referer", "https://music.youtube.com/")
-            .set("X-Goog-Api-Format-Version", "1")
-            .set("X-YouTube-Client-Name", "67")
-            .set("X-YouTube-Client-Version", "1.20250710.01.00")
-            .timeout(std::time::Duration::from_secs(15));
-
-        if let Some(auth) = build_sapisidhash(&cookie_header, origin) {
-            req = req.set("Authorization", &auth);
-            eprintln!("Authorization: {auth}");
-        }
-
-        let response = req
+        let response = build_innertube_request(&url, &cookie_header)
             .send_string(&body_str)
             .expect("browse endpoint request failed");
 
@@ -358,7 +412,7 @@ mod tests {
                 "context": {
                     "client": {
                         "clientName": "WEB_REMIX",
-                        "clientVersion": "1.20250710.01.00",
+                        "clientVersion": crate::innertube::CLIENT_VERSION,
                         "hl": "en",
                         "gl": "US"
                     }
@@ -370,22 +424,7 @@ mod tests {
                 "https://music.youtube.com/youtubei/v1/browse?key={api_key}&prettyPrint=false"
             );
 
-            let mut cont_req = ureq::post(&cont_url)
-                .set("Cookie", &cookie_header)
-                .set("User-Agent", ua)
-                .set("Content-Type", "application/json")
-                .set("X-Origin", origin)
-                .set("Referer", "https://music.youtube.com/")
-                .set("X-Goog-Api-Format-Version", "1")
-                .set("X-YouTube-Client-Name", "67")
-                .set("X-YouTube-Client-Version", "1.20250710.01.00")
-                .timeout(std::time::Duration::from_secs(15));
-
-            if let Some(auth) = build_sapisidhash(&cookie_header, origin) {
-                cont_req = cont_req.set("Authorization", &auth);
-            }
-
-            let cont_response = cont_req
+            let cont_response = build_innertube_request(&cont_url, &cookie_header)
                 .send_string(&cont_body.to_string())
                 .expect("continuation request failed");
 

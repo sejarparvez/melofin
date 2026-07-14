@@ -10,30 +10,96 @@ use std::path::Path;
 
 use crate::home_feed::{HomeFeed, HomeSection};
 use crate::search::Track;
-use crate::user::{build_cookie_header, build_sapisidhash, extract_innertube_api_key};
+use crate::user::{build_sapisidhash, extract_innertube_api_key, read_and_validate_cookies};
 
 pub(crate) const USER_AGENT: &str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 \
                           (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
-const CLIENT_VERSION: &str = "1.20250710.01.00";
+pub(crate) const CLIENT_VERSION: &str = "1.20250710.01.00";
 
 const ORIGIN: &str = "https://music.youtube.com";
+
+/// Builds a POST request to a YouTube Music InnerTube endpoint with the
+/// standard headers (cookies, user-agent, client version, SAPISIDHASH auth).
+pub(crate) fn build_innertube_request(url: &str, cookie_header: &str) -> ureq::Request {
+    let mut req = ureq::post(url)
+        .set("Cookie", cookie_header)
+        .set("User-Agent", USER_AGENT)
+        .set("Content-Type", "application/json")
+        .set("X-Origin", ORIGIN)
+        .set("Referer", "https://music.youtube.com/")
+        .set("X-Goog-Api-Format-Version", "1")
+        .set("X-YouTube-Client-Name", "67")
+        .set("X-YouTube-Client-Version", CLIENT_VERSION)
+        .timeout(std::time::Duration::from_secs(15));
+
+    if let Some(auth) = build_sapisidhash(cookie_header, ORIGIN) {
+        req = req.set("Authorization", &auth);
+    }
+    req
+}
+
+/// Extra browse IDs to fetch alongside `FEmusic_home` for a richer
+/// personalized feed. Each entry is `(browse_id, fallback_title)` — if the
+/// API call fails, the section is silently skipped.
+const EXTRA_BROWSE_IDS: &[(&str, &str)] = &[
+    ("FEmusic_charts", "Charts"),
+    ("FEmusic_new_releases", "New Releases"),
+    ("FEmusic_listen_again", "Listen Again"),
+    ("FEmusic_mixed_for_you", "Mixed For You"),
+];
+
+/// Extracts the next continuation token from a browse response. Tries
+/// both `singleColumnBrowseResultsRenderer` and
+/// `twoColumnBrowseResultsRenderer` layout paths.
+fn extract_continuation(json: &serde_json::Value) -> Option<String> {
+    let paths = [
+        "/contents/singleColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/continuations/0/nextContinuationData/continuation",
+        "/contents/twoColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/continuations/0/nextContinuationData/continuation",
+    ];
+    paths.iter().find_map(|path| {
+        json.pointer(path)
+            .and_then(|c| c.as_str())
+            .map(|s| s.to_string())
+    })
+}
+
+/// Fetches a single browse_id and returns its parsed sections (initial
+/// response + one level of continuation). Returns an empty `Vec` on error
+/// rather than propagating, so callers can skip failed sections.
+pub(crate) fn browse_section(
+    cookie_header: &str,
+    api_key: &str,
+    browse_id: &str,
+) -> Vec<HomeSection> {
+    let initial = match browse_request(cookie_header, api_key, Some(browse_id), None) {
+        Ok(json) => json,
+        Err(e) => {
+            tracing::warn!("browse_section({browse_id}) initial request failed: {e}");
+            return Vec::new();
+        }
+    };
+
+    let mut sections = parse_sections(&initial);
+
+    if let Some(token) = extract_continuation(&initial)
+        && let Ok(cont) = browse_request(cookie_header, api_key, None, Some(&token))
+    {
+        sections.extend(parse_continuation(&cont));
+    }
+
+    sections
+}
 
 /// Fetches the personalized home feed from YouTube Music's InnerTube API.
 ///
 /// Requires the user's cookies (from `~/.local/share/melofin/cookies.txt`).
-/// Makes two HTTP requests: one for the initial browse response, one for the
-/// continuation that contains the actual feed sections.
+/// Fetches `FEmusic_home` plus extra browse IDs (charts, new releases,
+/// etc.) in parallel for a richer feed.
 ///
 /// Blocking — call from a background thread, never from the GTK main thread.
 pub fn browse_home(cookies_path: &Path) -> Result<HomeFeed> {
-    let contents = std::fs::read_to_string(cookies_path).context("couldn't read cookies file")?;
-
-    let cookie_header = build_cookie_header(&contents);
-    anyhow::ensure!(
-        !cookie_header.is_empty(),
-        "cookie header is empty — cookies.txt malformed?"
-    );
+    let cookie_header = read_and_validate_cookies(cookies_path)?;
 
     // Fetch the page to get the API key.
     let html = ureq::get(ORIGIN)
@@ -48,29 +114,58 @@ pub fn browse_home(cookies_path: &Path) -> Result<HomeFeed> {
     let api_key =
         extract_innertube_api_key(&html).context("couldn't find INNERTUBE_API_KEY in page HTML")?;
 
-    // Step 1: initial browse — gets sections + continuation token.
-    let initial = browse_request(&cookie_header, &api_key, None, None)
-        .context("initial browse request failed")?;
+    // Fetch FEmusic_home (with full continuation following) + extra
+    // browse_ids in parallel.
+    let mut sections = browse_home_with_continuations(&cookie_header, &api_key);
 
-    // Collect sections from the initial response — it often already has
-    // real carousel data before the continuation.
+    let handles: Vec<_> = EXTRA_BROWSE_IDS
+        .iter()
+        .map(|(browse_id, _title)| {
+            let cookie = cookie_header.clone();
+            let key = api_key.clone();
+            let id = browse_id.to_string();
+            std::thread::spawn(move || browse_section(&cookie, &key, &id))
+        })
+        .collect();
+
+    for (handle, &(_, title)) in handles.into_iter().zip(EXTRA_BROWSE_IDS.iter()) {
+        match handle.join() {
+            Ok(extra) if !extra.is_empty() => {
+                tracing::debug!(title, count = extra.len(), "fetched extra section");
+                sections.extend(extra);
+            }
+            Ok(_) => {
+                tracing::debug!(title, "extra section returned empty, skipping");
+            }
+            Err(_) => {
+                tracing::warn!(title, "extra section thread panicked, skipping");
+            }
+        }
+    }
+
+    tracing::info!(
+        section_count = sections.len(),
+        "fetched personalized home feed"
+    );
+
+    Ok(HomeFeed { sections })
+}
+
+/// Fetches `FEmusic_home` with full continuation pagination (up to 10
+/// pages). This is the high-volume home feed that needs multiple
+/// continuation rounds, unlike the extra browse IDs which only need
+/// initial + one continuation.
+fn browse_home_with_continuations(cookie_header: &str, api_key: &str) -> Vec<HomeSection> {
+    let initial = match browse_request(cookie_header, api_key, None, None) {
+        Ok(json) => json,
+        Err(e) => {
+            tracing::warn!("FEmusic_home initial request failed: {e}");
+            return Vec::new();
+        }
+    };
+
     let mut sections = parse_sections(&initial);
-
-    // Follow continuation tokens to load more sections. Each response
-    // may contain a next continuation token for the next page.
-    let section_list_path = &[
-        "/contents/singleColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer",
-        "/contents/twoColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer",
-    ];
-
-    let mut current_token = section_list_path.iter().find_map(|path| {
-        initial
-            .pointer(&format!(
-                "{path}/continuations/0/nextContinuationData/continuation"
-            ))
-            .and_then(|c| c.as_str())
-            .map(|s| s.to_string())
-    });
+    let mut current_token = extract_continuation(&initial);
 
     let max_pages = 10;
     let mut page = 0;
@@ -81,14 +176,18 @@ pub fn browse_home(cookies_path: &Path) -> Result<HomeFeed> {
             break;
         }
 
-        let cont_response = browse_request(&cookie_header, &api_key, None, Some(&token))
-            .context("continuation browse request failed")?;
+        let cont_response = match browse_request(cookie_header, api_key, None, Some(&token)) {
+            Ok(json) => json,
+            Err(e) => {
+                tracing::warn!("FEmusic_home continuation page {page} failed: {e}");
+                break;
+            }
+        };
 
         let cont_sections = parse_continuation(&cont_response);
         let count = cont_sections.len();
         sections.extend(cont_sections);
 
-        // Extract next continuation token from this response.
         current_token = cont_response
             .pointer("/continuationContents/sectionListContinuation/continuations/0/nextContinuationData/continuation")
             .and_then(|c| c.as_str())
@@ -106,12 +205,7 @@ pub fn browse_home(cookies_path: &Path) -> Result<HomeFeed> {
         }
     }
 
-    tracing::info!(
-        section_count = sections.len(),
-        "fetched personalized home feed"
-    );
-
-    Ok(HomeFeed { sections })
+    sections
 }
 
 /// Sends a POST to `/youtubei/v1/browse`.
@@ -155,22 +249,7 @@ pub(crate) fn browse_request(
         })
     };
 
-    let mut req = ureq::post(&url)
-        .set("Cookie", cookie_header)
-        .set("User-Agent", USER_AGENT)
-        .set("Content-Type", "application/json")
-        .set("X-Origin", ORIGIN)
-        .set("Referer", "https://music.youtube.com/")
-        .set("X-Goog-Api-Format-Version", "1")
-        .set("X-YouTube-Client-Name", "67")
-        .set("X-YouTube-Client-Version", CLIENT_VERSION)
-        .timeout(std::time::Duration::from_secs(15));
-
-    if let Some(auth) = build_sapisidhash(cookie_header, ORIGIN) {
-        req = req.set("Authorization", &auth);
-    }
-
-    let text = req
+    let text = build_innertube_request(&url, cookie_header)
         .send_string(&body.to_string())
         .context("browse endpoint request failed")?
         .into_string()
