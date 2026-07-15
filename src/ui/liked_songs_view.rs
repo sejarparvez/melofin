@@ -92,12 +92,8 @@ impl LikedSongsView {
             let on_select = on_select.clone();
             list.connect_row_activated(move |_list, row| {
                 let index = row.index() as usize;
-                eprintln!("[liked_songs] Row activated, index={}", index);
                 if let Some(track) = all_tracks.borrow().get(index).cloned() {
-                    eprintln!("[liked_songs] track={}, kind={:?}", track.title, track.media_kind());
                     on_select(track);
-                } else {
-                    eprintln!("[liked_songs] No track at index {}", index);
                 }
             });
         }

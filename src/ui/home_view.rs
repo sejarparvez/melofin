@@ -504,7 +504,6 @@ fn track_card(track: Track, on_select: Rc<dyn Fn(Track)>, on_play: Rc<dyn Fn(Tra
         let on_select = on_select.clone();
         let track_clone = track.clone();
         button.connect_clicked(move |_| {
-            eprintln!("[home_card] Card clicked: title={}, kind={:?}", track_clone.title, track_clone.media_kind());
             on_select(track_clone.clone());
         });
     }

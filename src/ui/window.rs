@@ -16,7 +16,7 @@ use adw::prelude::*;
 use gtk::gdk;
 use gtk::gio;
 use gtk::glib;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 const APP_ID: &str = "dev.melofin.Melofin";
@@ -161,23 +161,88 @@ fn build_ui(app: &adw::Application) {
     content_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
     content_stack.set_transition_duration(200);
 
-    // Navigation state for detail views.
+    // Navigation history for back/forward support.
+    let nav_history = Rc::new(RefCell::new(vec!["home".to_string()]));
+    let nav_index = Rc::new(Cell::new(0usize));
     let detail_counter = Rc::new(Cell::new(0usize));
     let cookies_for_detail = auth.cookies_path().to_path_buf();
 
+    let navigate_to = {
+        let stack = content_stack.clone();
+        let history = nav_history.clone();
+        let index = nav_index.clone();
+        let back_btn = top_bar.back_button.clone();
+        let forward_btn = top_bar.forward_button.clone();
+        Rc::new(move |name: &str| {
+            let (i, len) = {
+                let mut h = history.borrow_mut();
+                let mut i = index.get();
+                h.truncate(i + 1);
+                if h.last().map(|s| s.as_str()) != Some(name) {
+                    h.push(name.to_string());
+                    i += 1;
+                }
+                index.set(i);
+                (i, h.len())
+            };
+            stack.set_visible_child_name(name);
+            back_btn.set_sensitive(i > 0);
+            forward_btn.set_sensitive(i < len - 1);
+        })
+    };
+
+    let go_back = {
+        let stack = content_stack.clone();
+        let history = nav_history.clone();
+        let index = nav_index.clone();
+        let back_btn = top_bar.back_button.clone();
+        let forward_btn = top_bar.forward_button.clone();
+        Rc::new(move || {
+            let mut i = index.get();
+            if i > 0 {
+                i -= 1;
+                index.set(i);
+                let h = history.borrow();
+                let target = h[i].clone();
+                let len = h.len();
+                drop(h);
+                stack.set_visible_child_name(&target);
+                back_btn.set_sensitive(i > 0);
+                forward_btn.set_sensitive(i < len - 1);
+            }
+        })
+    };
+
+    let go_forward = {
+        let stack = content_stack.clone();
+        let history = nav_history.clone();
+        let index = nav_index.clone();
+        let back_btn = top_bar.back_button.clone();
+        let forward_btn = top_bar.forward_button.clone();
+        Rc::new(move || {
+            let mut i = index.get();
+            let h = history.borrow();
+            if i < h.len() - 1 {
+                i += 1;
+                index.set(i);
+                let target = h[i].clone();
+                let len = h.len();
+                drop(h);
+                stack.set_visible_child_name(&target);
+                back_btn.set_sensitive(i > 0);
+                forward_btn.set_sensitive(i < len - 1);
+            }
+        })
+    };
+
     // on_select: navigate to detail page for any track/playlist/album.
+    let navigate_to_for_select = navigate_to.clone();
+    let go_back_for_select = go_back.clone();
     let content_stack_nav = content_stack.clone();
     let detail_counter_nav = detail_counter.clone();
     let cookies_nav = cookies_for_detail.clone();
     let play_track_for_select = play_track.clone();
     let on_select: Rc<dyn Fn(Track)> = Rc::new(move |track: Track| {
-        eprintln!(
-            "[on_select] title={}, artist={}, kind={:?}, url={}",
-            track.title,
-            track.artist,
-            track.media_kind(),
-            track.url
-        );
         let stack = content_stack_nav.clone();
         let counter = detail_counter_nav.clone();
         let cookies = cookies_nav.clone();
@@ -201,26 +266,15 @@ fn build_ui(app: &adw::Application) {
                     &metadata,
                     &[track],
                     play_track.clone(),
-                    Rc::new({
-                        let stack = stack.clone();
-                        let name = name.clone();
-                        move || {
-                            if let Some(child) = stack.child_by_name(&name) {
-                                stack.remove(&child);
-                            }
-                        }
-                    }),
+                    go_back_for_select.clone(),
                 );
                 detail.widget.set_hexpand(true);
                 detail.widget.set_vexpand(true);
-                eprintln!("[on_select] Adding detail view as '{}'", name);
                 stack.add_named(&detail.widget, Some(&name));
-                eprintln!("[on_select] Set visible child to '{}'", name);
-                stack.set_visible_child(&detail.widget);
+                navigate_to_for_select(&name);
             }
             MediaKind::Playlist | MediaKind::Album | MediaKind::Artist => {
                 // For playlists/albums, fetch details from InnerTube.
-                eprintln!("[on_select] Playlist/Album/Artist detected, browse_id={:?}", track.browse_id());
                 let browse_id = match track.browse_id() {
                     Some(id) => id.to_string(),
                     None => return,
@@ -233,7 +287,7 @@ fn build_ui(app: &adw::Application) {
                 loading.widget.set_hexpand(true);
                 loading.widget.set_vexpand(true);
                 stack.add_named(&loading.widget, Some(&name));
-                stack.set_visible_child(&loading.widget);
+                navigate_to_for_select(&name);
 
                 // Fetch details on background thread.
                 let (sender, receiver) =
@@ -250,9 +304,9 @@ fn build_ui(app: &adw::Application) {
                 let stack = stack.clone();
                 let name_clone = name.clone();
                 let play_track_clone = play_track.clone();
+                let go_back_async = go_back_for_select.clone();
                 glib::spawn_future_local(async move {
                     let Ok(result) = receiver.recv().await else {
-                        eprintln!("[on_select] Detail fetch channel closed");
                         return;
                     };
 
@@ -263,20 +317,7 @@ fn build_ui(app: &adw::Application) {
 
                     match result {
                         Ok(detail) => {
-                            eprintln!(
-                                "[on_select] Detail fetch OK: title={}, tracks={}",
-                                detail.metadata.title,
-                                detail.tracks.len()
-                            );
-                            let on_back = Rc::new({
-                                let stack = stack.clone();
-                                let name = name_clone.clone();
-                                move || {
-                                    if let Some(child) = stack.child_by_name(&name) {
-                                        stack.remove(&child);
-                                    }
-                                }
-                            });
+                            let on_back = go_back_async.clone();
                             let detail_view = DetailView::new(
                                 &detail.metadata,
                                 &detail.tracks,
@@ -289,16 +330,7 @@ fn build_ui(app: &adw::Application) {
                             stack.set_visible_child(&detail_view.widget);
                         }
                         Err(e) => {
-                            eprintln!("[on_select] Detail fetch FAILED: {e}");
-                            let on_retry: Rc<dyn Fn()> = Rc::new({
-                                let stack = stack.clone();
-                                let name = name_clone.clone();
-                                move || {
-                                    if let Some(child) = stack.child_by_name(&name) {
-                                        stack.remove(&child);
-                                    }
-                                }
-                            });
+                            let on_retry = go_back_async.clone();
                             let err_view =
                                 DetailView::error(&format!("Failed to load details: {e}"), on_retry);
                             err_view.widget.set_hexpand(true);
@@ -324,9 +356,9 @@ fn build_ui(app: &adw::Application) {
 
     // Home button: navigate back to home view.
     {
-        let stack = content_stack.clone();
+        let navigate_to_home = navigate_to.clone();
         top_bar.home_button.connect_clicked(move |_| {
-            stack.set_visible_child_name("home");
+            navigate_to_home("home");
         });
     }
 
@@ -337,7 +369,6 @@ fn build_ui(app: &adw::Application) {
     let now_playing_panel = NowPlayingPanel::new(auth.cookies_path().to_path_buf());
 
     // Library sidebar: "Liked Songs" click switches the stack.
-    // We create the sidebar after the stack so we can clone the stack into the callback.
     let content_stack_for_sidebar = content_stack.clone();
     let cookies_for_liked = auth.cookies_path().to_path_buf();
     let library_sidebar = LibrarySidebar::new({
@@ -345,31 +376,35 @@ fn build_ui(app: &adw::Application) {
         let cookies = cookies_for_liked.clone();
         let on_select = on_select.clone();
         let play_track = play_track.clone();
+        let navigate_to_liked = navigate_to.clone();
+        let go_back_for_liked = go_back.clone();
         move || {
-            // Create liked songs view on demand, add to stack, switch to it.
             let stack = stack.clone();
-            let on_back: Rc<dyn Fn()> = Rc::new({
-                let stack = stack.clone();
-                move || {
-                    stack.set_visible_child_name("home");
-                }
-            });
             let liked_view = LikedSongsView::new(
                 cookies.clone(),
                 on_select.clone(),
                 play_track.clone(),
-                on_back,
+                go_back_for_liked.clone(),
             );
             liked_view.widget.set_hexpand(true);
             liked_view.widget.set_vexpand(true);
-            // Remove old liked songs page if it exists.
             if let Some(old) = stack.child_by_name("liked") {
                 stack.remove(&old);
             }
             stack.add_named(&liked_view.widget, Some("liked"));
-            stack.set_visible_child(&liked_view.widget);
+            navigate_to_liked("liked");
         }
     });
+
+    // Back/forward navigation buttons.
+    {
+        let go_back = go_back.clone();
+        top_bar.back_button.connect_clicked(move |_| go_back());
+    }
+    {
+        let go_forward = go_forward.clone();
+        top_bar.forward_button.connect_clicked(move |_| go_forward());
+    }
 
     content_stack.set_hexpand(true);
     content_stack.set_vexpand(true);

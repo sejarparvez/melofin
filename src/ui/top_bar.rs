@@ -18,6 +18,8 @@ pub struct TopBar {
     pub root: gtk::Box,
     pub search_entry: gtk::SearchEntry,
     pub home_button: gtk::Button,
+    pub back_button: gtk::Button,
+    pub forward_button: gtk::Button,
     /// Account `MenuButton` — clicking it toggles the user popover.
     /// `window.rs` connects signal handlers since that's where
     /// `AuthManager` and the window's `ToastOverlay` live.
@@ -61,6 +63,8 @@ pub fn build_top_bar() -> TopBar {
         root,
         search_entry: center.search_entry,
         home_button: left.home_button,
+        back_button: left.back_button,
+        forward_button: left.forward_button,
         account_button: right_btn,
         popover_name,
         popover_email,
@@ -108,13 +112,14 @@ impl TopBar {
 struct LeftCluster {
     root: gtk::Box,
     home_button: gtk::Button,
+    back_button: gtk::Button,
+    forward_button: gtk::Button,
 }
 
 /// Overflow menu, back, forward, home.
 ///
-/// Back/forward stay disabled until there's real view-stack history to
-/// traverse (currently the app just toggles between two views: home and
-/// search — see `window.rs`). Home is live since that toggle exists now.
+/// Back/forward start disabled — `window.rs` enables them once there's
+/// navigation history to traverse.
 /// The overflow menu is live from day one since it's the only way to quit
 /// without a titlebar close button.
 fn build_left_cluster() -> LeftCluster {
@@ -131,13 +136,13 @@ fn build_left_cluster() -> LeftCluster {
     back_button.add_css_class("flat");
     back_button.add_css_class("circular");
     back_button.set_tooltip_text(Some("Back"));
-    back_button.set_sensitive(false); // TODO: enable once a view stack exists
+    back_button.set_sensitive(false);
 
     let forward_button = gtk::Button::from_icon_name("go-next-symbolic");
     forward_button.add_css_class("flat");
     forward_button.add_css_class("circular");
     forward_button.set_tooltip_text(Some("Forward"));
-    forward_button.set_sensitive(false); // TODO: enable once a view stack exists
+    forward_button.set_sensitive(false);
 
     let home_button = gtk::Button::from_icon_name("go-home-symbolic");
     home_button.add_css_class("flat");
@@ -149,7 +154,7 @@ fn build_left_cluster() -> LeftCluster {
     root.append(&forward_button);
     root.append(&home_button);
 
-    LeftCluster { root, home_button }
+    LeftCluster { root, home_button, back_button, forward_button }
 }
 
 struct CenterCluster {
