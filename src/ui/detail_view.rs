@@ -18,12 +18,6 @@ impl DetailView {
         on_play_track: Rc<dyn Fn(Track)>,
         on_back: Rc<dyn Fn()>,
     ) -> Self {
-        eprintln!(
-            "[DetailView::new] title={}, artist={}, tracks={}",
-            metadata.title,
-            metadata.artist,
-            tracks.len()
-        );
         let content = gtk::Box::new(gtk::Orientation::Vertical, 16);
         content.set_margin_top(20);
         content.set_margin_bottom(24);
@@ -145,8 +139,8 @@ impl DetailView {
         list.set_margin_start(12);
         list.set_margin_end(12);
 
-        for track in tracks {
-            list.append(&thumbnail_widget::build_track_row(track));
+        for (i, track) in tracks.iter().enumerate() {
+            list.append(&thumbnail_widget::build_detail_track_row(track, i));
         }
 
         // Wire row activation to play.

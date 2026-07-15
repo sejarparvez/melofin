@@ -565,6 +565,9 @@ mod tests {
                     artist: "Artist B".into(),
                     url: "https://example.com".into(),
                     thumbnail_url: "https://example.com/thumb.jpg".into(),
+                    track_number: None,
+                    duration: None,
+                    album: None,
                 }],
             }],
         };

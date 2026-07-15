@@ -91,25 +91,38 @@ fn parse_metadata(json: &serde_json::Value) -> DetailMetadata {
     if let Some(header) = json
         .pointer("/contents/twoColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents/0/musicResponsiveHeaderRenderer")
     {
-        return parse_responsive_header(header);
+        let mut meta = parse_responsive_header(header);
+        // Fallback: if header didn't have a thumbnail, try background/microformat.
+        if meta.thumbnail_url.is_empty() {
+            meta.thumbnail_url = extract_thumbnail_fallback(json);
+        }
+        meta.thumbnail_url = normalize_thumbnail_url(&meta.thumbnail_url);
+        return meta;
     }
 
     // Try immersive header (artists).
     if let Some(header) = json
         .pointer("/contents/twoColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents/0/musicImmersiveHeaderRenderer")
     {
-        return parse_immersive_header(header);
+        let mut meta = parse_immersive_header(header);
+        if meta.thumbnail_url.is_empty() {
+            meta.thumbnail_url = extract_thumbnail_fallback(json);
+        }
+        meta.thumbnail_url = normalize_thumbnail_url(&meta.thumbnail_url);
+        return meta;
     }
 
     // Fallback: minimal metadata.
-    DetailMetadata {
+    let mut meta = DetailMetadata {
         title: String::new(),
         artist: String::new(),
-        thumbnail_url: String::new(),
+        thumbnail_url: extract_thumbnail_fallback(json),
         description: String::new(),
         year: String::new(),
         track_count: 0,
-    }
+    };
+    meta.thumbnail_url = normalize_thumbnail_url(&meta.thumbnail_url);
+    meta
 }
 
 fn parse_responsive_header(header: &serde_json::Value) -> DetailMetadata {
@@ -228,6 +241,40 @@ fn parse_description(header: &serde_json::Value) -> String {
                 .join("")
         })
         .unwrap_or_default()
+}
+
+/// Tries to extract a thumbnail URL from `background` or `microformat`
+/// when the header renderer doesn't provide one.
+fn extract_thumbnail_fallback(json: &serde_json::Value) -> String {
+    // Try background/musicThumbnailRenderer
+    if let Some(url) = json
+        .pointer("/background/musicThumbnailRenderer/thumbnail/thumbnails")
+        .and_then(|t| t.as_array())
+        .and_then(|arr| arr.last())
+        .and_then(|t| t.get("url"))
+        .and_then(|u| u.as_str())
+        .filter(|s| !s.is_empty())
+    {
+        return url.to_string();
+    }
+    // Try microformat/microformatDataRenderer/thumbnail
+    if let Some(url) = json
+        .pointer("/microformat/microformatDataRenderer/thumbnail")
+        .and_then(|u| u.as_str())
+        .filter(|s| !s.is_empty())
+    {
+        return url.to_string();
+    }
+    String::new()
+}
+
+/// Normalizes a thumbnail URL: converts protocol-relative (`//`) to `https://`.
+fn normalize_thumbnail_url(url: &str) -> String {
+    if let Some(rest) = url.strip_prefix("//") {
+        format!("https://{rest}")
+    } else {
+        url.to_string()
+    }
 }
 
 /// Parses tracks from the initial browse response. Looks for tracks in

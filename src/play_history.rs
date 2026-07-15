@@ -100,6 +100,9 @@ pub fn recently_played(events: &[PlayEvent], limit: usize) -> Vec<Track> {
             artist: e.artist.clone(),
             url: format!("https://music.youtube.com/watch?v={}", e.video_id),
             thumbnail_url: e.thumbnail_url.clone(),
+            track_number: None,
+            duration: None,
+            album: None,
         })
         .collect()
 }
@@ -126,6 +129,9 @@ pub fn top_tracks(events: &[PlayEvent], limit: usize) -> Vec<Track> {
             artist: event.artist.clone(),
             url: format!("https://music.youtube.com/watch?v={}", event.video_id),
             thumbnail_url: event.thumbnail_url.clone(),
+            track_number: None,
+            duration: None,
+            album: None,
         })
         .collect()
 }

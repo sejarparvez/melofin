@@ -10,6 +10,12 @@ pub struct Track {
     /// URL of the track's thumbnail image, or empty if we couldn't
     /// determine a video id to build one from.
     pub thumbnail_url: String,
+    #[serde(default)]
+    pub track_number: Option<u32>,
+    #[serde(default)]
+    pub duration: Option<String>,
+    #[serde(default)]
+    pub album: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -82,6 +88,9 @@ pub fn parse_search_output(raw: &str) -> Vec<Track> {
                     artist: parts[2].to_string(),
                     url: parts[3].to_string(),
                     thumbnail_url: thumbnail_url_for_id(id),
+                    track_number: None,
+                    duration: None,
+                    album: None,
                 })
             } else {
                 None
@@ -123,12 +132,18 @@ mod tests {
                     artist: "Artist A".into(),
                     url: "https://youtu.be/a".into(),
                     thumbnail_url: "https://i.ytimg.com/vi/aaaaaaaaaaa/mqdefault.jpg".into(),
+                    track_number: None,
+                    duration: None,
+                    album: None,
                 },
                 Track {
                     title: "Song B".into(),
                     artist: "Artist B".into(),
                     url: "https://youtu.be/b".into(),
                     thumbnail_url: "https://i.ytimg.com/vi/bbbbbbbbbbb/mqdefault.jpg".into(),
+                    track_number: None,
+                    duration: None,
+                    album: None,
                 },
             ]
         );

@@ -153,3 +153,55 @@ pub fn build_track_row(track: &Track) -> adw::ActionRow {
 
     row
 }
+
+/// Builds a detailed track row for album/playlist detail views with
+/// track number, thumbnail, title, artist+album subtitle, and duration.
+pub fn build_detail_track_row(track: &Track, index: usize) -> adw::ActionRow {
+    let row = adw::ActionRow::new();
+    row.set_activatable(true);
+
+    // Track number prefix
+    let num_label = gtk::Label::new(Some(&(index + 1).to_string()));
+    num_label.add_css_class("dim-label");
+    num_label.set_width_chars(3);
+    num_label.set_xalign(1.0);
+    row.add_prefix(&num_label);
+
+    // Thumbnail
+    let thumbnail = gtk::Picture::new();
+    thumbnail.set_size_request(40, 40);
+    thumbnail.set_content_fit(gtk::ContentFit::Cover);
+    row.add_prefix(&thumbnail);
+    if !track.thumbnail_url.is_empty() {
+        let url = track.thumbnail_url.clone();
+        spawn_fetch(url, 40, move |texture| {
+            thumbnail.set_paintable(Some(&texture));
+        });
+    }
+
+    // Title
+    row.set_title(&glib::markup_escape_text(&track.title));
+
+    // Subtitle: artist · album (or just artist)
+    let subtitle = match (&track.artist, &track.album) {
+        (artist, Some(album)) if !artist.is_empty() && !album.is_empty() => {
+            format!("{} · {}", artist, album)
+        }
+        (artist, _) if !artist.is_empty() => artist.clone(),
+        (_, Some(album)) if !album.is_empty() => album.clone(),
+        _ => String::new(),
+    };
+    if !subtitle.is_empty() {
+        row.set_subtitle(&glib::markup_escape_text(&subtitle));
+    }
+
+    // Duration suffix
+    if let Some(ref duration) = track.duration {
+        let dur_label = gtk::Label::new(Some(duration));
+        dur_label.add_css_class("dim-label");
+        dur_label.set_halign(gtk::Align::End);
+        row.add_suffix(&dur_label);
+    }
+
+    row
+}

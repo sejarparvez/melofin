@@ -332,6 +332,15 @@ fn parse_carousel(renderer: &serde_json::Value) -> Option<HomeSection> {
     })
 }
 
+/// Normalizes a thumbnail URL: converts protocol-relative (`//`) to `https://`.
+fn normalize_thumbnail_url(url: &str) -> String {
+    if let Some(rest) = url.strip_prefix("//") {
+        format!("https://{rest}")
+    } else {
+        url.to_string()
+    }
+}
+
 /// Parses a song from a `musicResponsiveListItemRenderer`. These appear in
 /// "Quick picks", liked songs, and similar song-list sections.
 pub(crate) fn parse_song_item(renderer: &serde_json::Value) -> Option<Track> {
@@ -387,13 +396,52 @@ pub(crate) fn parse_song_item(renderer: &serde_json::Value) -> Option<Track> {
         .and_then(|arr| arr.last())
         .and_then(|t| t.get("url"))
         .and_then(|u| u.as_str())
-        .unwrap_or("");
+        .filter(|s| !s.is_empty())
+        .map(normalize_thumbnail_url)
+        .unwrap_or_else(|| {
+            // Album/playlist track items often lack a thumbnail field.
+            // Build one from the video ID using YouTube's standard CDN.
+            format!("https://i.ytimg.com/vi/{video_id}/mqdefault.jpg")
+        });
+
+    // Track number from index field.
+    let track_number = renderer
+        .pointer("/index/runs/0/text")
+        .and_then(|t| t.as_str())
+        .and_then(|s| s.parse::<u32>().ok());
+
+    // Duration from fixedColumns.
+    let duration = renderer
+        .pointer("/fixedColumns/0/musicResponsiveListItemFixedColumnRenderer/text/runs/0/text")
+        .and_then(|t| t.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+
+    // Album name: look for an album link (MPREb_ browseId) in flexColumns.
+    let album = renderer
+        .pointer("/flexColumns/1/musicResponsiveListItemFlexColumnRenderer/text/runs")
+        .and_then(|r| r.as_array())
+        .and_then(|runs| {
+            runs.iter()
+                .find(|run| {
+                    run.pointer("/navigationEndpoint/browseEndpoint/browseId")
+                        .and_then(|id| id.as_str())
+                        .is_some_and(|id| id.starts_with("MPREb_"))
+                })
+                .and_then(|run| run.get("text"))
+                .and_then(|t| t.as_str())
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+        });
 
     Some(Track {
         title: title.to_string(),
         artist: artist.to_string(),
         url: format!("https://music.youtube.com/watch?v={video_id}"),
         thumbnail_url: thumbnail.to_string(),
+        track_number,
+        duration,
+        album,
     })
 }
 
@@ -432,17 +480,22 @@ fn parse_two_row_item(renderer: &serde_json::Value) -> Option<Track> {
         return None;
     };
 
-    let thumbnail = renderer
-        .pointer("/thumbnailRenderer/musicThumbnailRenderer/thumbnail/thumbnails")?
-        .as_array()?
-        .last()?
-        .get("url")?
-        .as_str()?;
+    let thumbnail = normalize_thumbnail_url(
+        renderer
+            .pointer("/thumbnailRenderer/musicThumbnailRenderer/thumbnail/thumbnails")?
+            .as_array()?
+            .last()?
+            .get("url")?
+            .as_str()?,
+    );
 
     Some(Track {
         title: title.to_string(),
         artist: artist.to_string(),
         url,
-        thumbnail_url: thumbnail.to_string(),
+        thumbnail_url: thumbnail,
+        track_number: None,
+        duration: None,
+        album: None,
     })
 }
