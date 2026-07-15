@@ -20,8 +20,9 @@ pub struct LikedSongsView {
 impl LikedSongsView {
     pub fn new(
         cookies_path: PathBuf,
-        on_select: impl Fn(Track) + 'static + Clone,
-        on_back: impl Fn() + 'static + Clone,
+        on_select: Rc<dyn Fn(Track)>,
+        _on_play: Rc<dyn Fn(Track)>,
+        on_back: Rc<dyn Fn()>,
     ) -> Self {
         let widget = gtk::Box::new(gtk::Orientation::Vertical, 0);
 
@@ -91,8 +92,12 @@ impl LikedSongsView {
             let on_select = on_select.clone();
             list.connect_row_activated(move |_list, row| {
                 let index = row.index() as usize;
+                eprintln!("[liked_songs] Row activated, index={}", index);
                 if let Some(track) = all_tracks.borrow().get(index).cloned() {
+                    eprintln!("[liked_songs] track={}, kind={:?}", track.title, track.media_kind());
                     on_select(track);
+                } else {
+                    eprintln!("[liked_songs] No track at index {}", index);
                 }
             });
         }
@@ -171,7 +176,7 @@ fn append_page(
     list: &gtk::ListBox,
     all_tracks: &Rc<RefCell<Vec<Track>>>,
     displayed: &Rc<Cell<usize>>,
-    _on_select: &(impl Fn(Track) + Clone),
+    _on_select: &Rc<dyn Fn(Track)>,
 ) {
     let start = displayed.get();
     let tracks = all_tracks.borrow();

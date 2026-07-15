@@ -33,7 +33,11 @@ impl SearchView {
     /// this only attaches behavior to it, it doesn't create or display one
     /// of its own. `on_select` fires when the user activates a result row,
     /// with the corresponding `Track`.
-    pub fn new(search_entry: &gtk::SearchEntry, on_select: impl Fn(Track) + 'static) -> Self {
+    pub fn new(
+        search_entry: &gtk::SearchEntry,
+        on_select: Rc<dyn Fn(Track)>,
+        _on_play: Rc<dyn Fn(Track)>,
+    ) -> Self {
         let results_list = gtk::ListBox::new();
         results_list.set_selection_mode(gtk::SelectionMode::None);
         results_list.add_css_class("boxed-list"); // native Adwaita grouped-list styling

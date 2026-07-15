@@ -335,38 +335,59 @@ fn parse_carousel(renderer: &serde_json::Value) -> Option<HomeSection> {
 /// Parses a song from a `musicResponsiveListItemRenderer`. These appear in
 /// "Quick picks", liked songs, and similar song-list sections.
 pub(crate) fn parse_song_item(renderer: &serde_json::Value) -> Option<Track> {
-    let video_id = renderer.get("videoId")?.as_str()?;
+    // YouTube Music removed playlistItemData.videoId from the renderer.
+    // Use a fallback chain to find the video ID through multiple paths.
+    let video_id = renderer
+        .get("playlistItemData")
+        .and_then(|p| p.get("videoId"))
+        .or_else(|| renderer.pointer("/navigationEndpoint/watchEndpoint/videoId"))
+        .or_else(|| renderer.pointer(
+            "/overlay/musicItemThumbnailOverlayRenderer/content/musicPlayButtonRenderer/playNavigationEndpoint/watchEndpoint/videoId",
+        ))
+        .or_else(|| renderer.pointer(
+            "/flexColumns/0/musicResponsiveListItemFlexColumnRenderer/text/runs/0/navigationEndpoint/watchEndpoint/videoId",
+        ))
+        .and_then(|v| v.as_str())?;
 
     // Title is in the first flex column.
     let title = renderer
-        .pointer("/flexColumns/0/musicResponsiveListItemFlexColumnRenderer/text/runs")?
-        .as_array()?
-        .first()?
-        .get("text")?
-        .as_str()?;
+        .pointer("/flexColumns/0/musicResponsiveListItemFlexColumnRenderer/text/runs/0/text")
+        .and_then(|t| t.as_str())
+        .unwrap_or("Unknown Title");
 
-    // Artist is the first element of the second flex column's secondary line.
-    let secondary = renderer
-        .pointer("/flexColumns/1/musicResponsiveListItemFlexColumnRenderer/text/runs")?
-        .as_array()?;
-
-    let artist = secondary
-        .iter()
-        .find(|run| {
-            // Skip album links (they have browseEndpoint with MPREb_ prefix).
-            !run.pointer("/navigationEndpoint/browseEndpoint/browseId")
-                .and_then(|id| id.as_str())
-                .is_some_and(|id| id.starts_with("MPREb_"))
-        })?
-        .get("text")?
-        .as_str()?;
+    // Artist: try flexColumns[1] first, then extract from accessibility label.
+    let artist = renderer
+        .pointer("/flexColumns/1/musicResponsiveListItemFlexColumnRenderer/text/runs")
+        .and_then(|r| r.as_array())
+        .and_then(|runs| {
+            runs.iter()
+                .find(|run| {
+                    // Skip album links (they have browseEndpoint with MPREb_ prefix).
+                    !run.pointer("/navigationEndpoint/browseEndpoint/browseId")
+                        .and_then(|id| id.as_str())
+                        .is_some_and(|id| id.starts_with("MPREb_"))
+                })
+                .and_then(|run| run.get("text"))
+                .and_then(|t| t.as_str())
+                .filter(|s| !s.is_empty())
+        })
+        .or_else(|| {
+            // Fallback: extract from "Play Title - Artist" accessibility label.
+            renderer
+                .pointer("/overlay/musicItemThumbnailOverlayRenderer/content/musicPlayButtonRenderer/accessibilityPlayData/accessibilityData/label")
+                .and_then(|l| l.as_str())
+                .and_then(|label| label.strip_prefix("Play "))
+                .and_then(|rest| rest.rsplit_once(" - ").map(|(_, artist)| artist))
+        })
+        .unwrap_or("Unknown Artist");
 
     let thumbnail = renderer
-        .pointer("/thumbnail/musicThumbnailRenderer/thumbnail/thumbnails")?
-        .as_array()?
-        .last()?
-        .get("url")?
-        .as_str()?;
+        .pointer("/thumbnail/musicThumbnailRenderer/thumbnail/thumbnails")
+        .and_then(|t| t.as_array())
+        .and_then(|arr| arr.last())
+        .and_then(|t| t.get("url"))
+        .and_then(|u| u.as_str())
+        .unwrap_or("");
 
     Some(Track {
         title: title.to_string(),

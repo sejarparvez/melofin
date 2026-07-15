@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod detail_fetch;
 pub mod home_feed;
 pub mod innertube;
 pub mod liked_songs;

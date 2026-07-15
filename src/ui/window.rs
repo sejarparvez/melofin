@@ -1,5 +1,8 @@
 use crate::auth::{AuthManager, AuthState};
+use crate::detail_fetch;
 use crate::player::{self, PlayerCommand};
+use crate::search::{MediaKind, Track};
+use crate::ui::detail_view::DetailView;
 use crate::ui::home_view::HomeView;
 use crate::ui::library_sidebar::LibrarySidebar;
 use crate::ui::liked_songs_view::LikedSongsView;
@@ -13,6 +16,8 @@ use adw::prelude::*;
 use gtk::gdk;
 use gtk::gio;
 use gtk::glib;
+use std::cell::Cell;
+use std::rc::Rc;
 
 const APP_ID: &str = "dev.melofin.Melofin";
 
@@ -135,13 +140,13 @@ fn build_ui(app: &adw::Application) {
     let handle = player::spawn_player_thread();
 
     let commands = handle.commands.clone();
-    let play_track = move |track: crate::search::Track| {
+    let play_track = Rc::new(move |track: Track| {
         if track.url.is_empty() {
             tracing::debug!("ignoring click on placeholder home card: {}", track.title);
             return;
         }
         let _ = commands.send_blocking(PlayerCommand::Play(track));
-    };
+    });
 
     let home_cache_path = glib::user_cache_dir()
         .join("melofin")
@@ -151,21 +156,181 @@ fn build_ui(app: &adw::Application) {
         .join("melofin")
         .join("play_history.jsonl");
 
-    // Content stack switches between home feed and liked songs view.
+    // Content stack switches between home feed, liked songs, and detail views.
     let content_stack = gtk::Stack::new();
     content_stack.set_transition_type(gtk::StackTransitionType::Crossfade);
     content_stack.set_transition_duration(200);
+
+    // Navigation state for detail views.
+    let detail_counter = Rc::new(Cell::new(0usize));
+    let cookies_for_detail = auth.cookies_path().to_path_buf();
+
+    // on_select: navigate to detail page for any track/playlist/album.
+    let content_stack_nav = content_stack.clone();
+    let detail_counter_nav = detail_counter.clone();
+    let cookies_nav = cookies_for_detail.clone();
+    let play_track_for_select = play_track.clone();
+    let on_select: Rc<dyn Fn(Track)> = Rc::new(move |track: Track| {
+        eprintln!(
+            "[on_select] title={}, artist={}, kind={:?}, url={}",
+            track.title,
+            track.artist,
+            track.media_kind(),
+            track.url
+        );
+        let stack = content_stack_nav.clone();
+        let counter = detail_counter_nav.clone();
+        let cookies = cookies_nav.clone();
+        let play_track = play_track_for_select.clone();
+
+        match track.media_kind() {
+            MediaKind::Song => {
+                // For songs, show a detail view with the song's own data.
+                let name = format!("detail_{}", counter.get());
+                counter.set(counter.get() + 1);
+
+                let metadata = detail_fetch::DetailMetadata {
+                    title: track.title.clone(),
+                    artist: track.artist.clone(),
+                    thumbnail_url: track.thumbnail_url.clone(),
+                    description: String::new(),
+                    year: String::new(),
+                    track_count: 1,
+                };
+                let detail = DetailView::new(
+                    &metadata,
+                    &[track],
+                    play_track.clone(),
+                    Rc::new({
+                        let stack = stack.clone();
+                        let name = name.clone();
+                        move || {
+                            if let Some(child) = stack.child_by_name(&name) {
+                                stack.remove(&child);
+                            }
+                        }
+                    }),
+                );
+                detail.widget.set_hexpand(true);
+                detail.widget.set_vexpand(true);
+                eprintln!("[on_select] Adding detail view as '{}'", name);
+                stack.add_named(&detail.widget, Some(&name));
+                eprintln!("[on_select] Set visible child to '{}'", name);
+                stack.set_visible_child(&detail.widget);
+            }
+            MediaKind::Playlist | MediaKind::Album | MediaKind::Artist => {
+                // For playlists/albums, fetch details from InnerTube.
+                eprintln!("[on_select] Playlist/Album/Artist detected, browse_id={:?}", track.browse_id());
+                let browse_id = match track.browse_id() {
+                    Some(id) => id.to_string(),
+                    None => return,
+                };
+                let name = format!("detail_{}", counter.get());
+                counter.set(counter.get() + 1);
+
+                // Show loading state.
+                let loading = DetailView::loading();
+                loading.widget.set_hexpand(true);
+                loading.widget.set_vexpand(true);
+                stack.add_named(&loading.widget, Some(&name));
+                stack.set_visible_child(&loading.widget);
+
+                // Fetch details on background thread.
+                let (sender, receiver) =
+                    async_channel::bounded::<anyhow::Result<detail_fetch::DetailResult>>(1);
+                let fetch_cookies = cookies.clone();
+                let fetch_browse_id = browse_id.clone();
+                std::thread::spawn(move || {
+                    let _ = sender.send_blocking(detail_fetch::fetch_detail(
+                        &fetch_cookies,
+                        &fetch_browse_id,
+                    ));
+                });
+
+                let stack = stack.clone();
+                let name_clone = name.clone();
+                let play_track_clone = play_track.clone();
+                glib::spawn_future_local(async move {
+                    let Ok(result) = receiver.recv().await else {
+                        eprintln!("[on_select] Detail fetch channel closed");
+                        return;
+                    };
+
+                    // Remove loading state.
+                    if let Some(child) = stack.child_by_name(&name_clone) {
+                        stack.remove(&child);
+                    }
+
+                    match result {
+                        Ok(detail) => {
+                            eprintln!(
+                                "[on_select] Detail fetch OK: title={}, tracks={}",
+                                detail.metadata.title,
+                                detail.tracks.len()
+                            );
+                            let on_back = Rc::new({
+                                let stack = stack.clone();
+                                let name = name_clone.clone();
+                                move || {
+                                    if let Some(child) = stack.child_by_name(&name) {
+                                        stack.remove(&child);
+                                    }
+                                }
+                            });
+                            let detail_view = DetailView::new(
+                                &detail.metadata,
+                                &detail.tracks,
+                                play_track_clone,
+                                on_back,
+                            );
+                            detail_view.widget.set_hexpand(true);
+                            detail_view.widget.set_vexpand(true);
+                            stack.add_named(&detail_view.widget, Some(&name_clone));
+                            stack.set_visible_child(&detail_view.widget);
+                        }
+                        Err(e) => {
+                            eprintln!("[on_select] Detail fetch FAILED: {e}");
+                            let on_retry: Rc<dyn Fn()> = Rc::new({
+                                let stack = stack.clone();
+                                let name = name_clone.clone();
+                                move || {
+                                    if let Some(child) = stack.child_by_name(&name) {
+                                        stack.remove(&child);
+                                    }
+                                }
+                            });
+                            let err_view =
+                                DetailView::error(&format!("Failed to load details: {e}"), on_retry);
+                            err_view.widget.set_hexpand(true);
+                            err_view.widget.set_vexpand(true);
+                            stack.add_named(&err_view.widget, Some(&name_clone));
+                            stack.set_visible_child(&err_view.widget);
+                        }
+                    }
+                });
+            }
+        }
+    });
 
     let home_view = HomeView::new(
         auth.cookies_path().to_path_buf(),
         home_cache_path,
         history_path,
+        on_select.clone(),
         play_track.clone(),
     );
     content_stack.add_named(&home_view.widget, Some("home"));
     content_stack.set_visible_child(&home_view.widget);
 
-    let search_view = SearchView::new(&top_bar.search_entry, play_track.clone());
+    // Home button: navigate back to home view.
+    {
+        let stack = content_stack.clone();
+        top_bar.home_button.connect_clicked(move |_| {
+            stack.set_visible_child_name("home");
+        });
+    }
+
+    let search_view = SearchView::new(&top_bar.search_entry, on_select.clone(), play_track.clone());
     let _search_view = search_view;
 
     let player_bar = PlayerBar::new(handle.commands.clone());
@@ -178,17 +343,23 @@ fn build_ui(app: &adw::Application) {
     let library_sidebar = LibrarySidebar::new({
         let stack = content_stack_for_sidebar.clone();
         let cookies = cookies_for_liked.clone();
+        let on_select = on_select.clone();
         let play_track = play_track.clone();
         move || {
             // Create liked songs view on demand, add to stack, switch to it.
             let stack = stack.clone();
-            let on_back = {
+            let on_back: Rc<dyn Fn()> = Rc::new({
                 let stack = stack.clone();
                 move || {
                     stack.set_visible_child_name("home");
                 }
-            };
-            let liked_view = LikedSongsView::new(cookies.clone(), play_track.clone(), on_back);
+            });
+            let liked_view = LikedSongsView::new(
+                cookies.clone(),
+                on_select.clone(),
+                play_track.clone(),
+                on_back,
+            );
             liked_view.widget.set_hexpand(true);
             liked_view.widget.set_vexpand(true);
             // Remove old liked songs page if it exists.

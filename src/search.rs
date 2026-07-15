@@ -12,6 +12,33 @@ pub struct Track {
     pub thumbnail_url: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MediaKind {
+    Song,
+    Playlist,
+    Album,
+    Artist,
+}
+
+impl Track {
+    /// Returns whether this track is a song, playlist, album, or artist
+    /// based on its URL pattern.
+    pub fn media_kind(&self) -> MediaKind {
+        if self.url.contains("/browse/") {
+            MediaKind::Playlist
+        } else {
+            MediaKind::Song
+        }
+    }
+
+    /// Extracts the YouTube Music browse_id from a `browse/` URL.
+    /// Returns `None` for song URLs (`watch?v=`).
+    pub fn browse_id(&self) -> Option<&str> {
+        self.url
+            .strip_prefix("https://music.youtube.com/browse/")
+    }
+}
+
 /// Runs `yt-dlp` against YouTube Music search and returns parsed results.
 /// This is the only part of search that touches the outside world; the
 /// actual parsing lives in [`parse_search_output`] so it can be unit tested

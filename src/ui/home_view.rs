@@ -19,20 +19,21 @@ use crate::ui::thumbnail_widget;
 use adw::prelude::*;
 use gtk::glib;
 use std::path::PathBuf;
+use std::rc::Rc;
 
 pub struct HomeView {
     pub widget: gtk::ScrolledWindow,
 }
 
 impl HomeView {
-    /// `on_select` fires when the user clicks a card (or the hero card's
-    /// play button), with the corresponding `Track` — wired the same way
-    /// as `search_view::SearchView::new`'s `on_select`.
+    /// `on_select` fires when the user clicks a card — navigates to detail.
+    /// `on_play` fires when the user clicks the hover play icon — plays immediately.
     pub fn new(
         cookies_path: PathBuf,
         cache_path: PathBuf,
         history_path: PathBuf,
-        on_select: impl Fn(Track) + 'static + Clone,
+        on_select: Rc<dyn Fn(Track)>,
+        on_play: Rc<dyn Fn(Track)>,
     ) -> Self {
         let content = gtk::Box::new(gtk::Orientation::Vertical, 24);
         content.set_margin_top(20);
@@ -55,6 +56,7 @@ impl HomeView {
             cache_path,
             history_path,
             on_select,
+            on_play,
         );
 
         let widget = gtk::ScrolledWindow::new();
@@ -78,7 +80,8 @@ fn load_feed(
     cookies_path: PathBuf,
     cache_path: PathBuf,
     history_path: PathBuf,
-    on_select: impl Fn(Track) + 'static + Clone,
+    on_select: Rc<dyn Fn(Track)>,
+    on_play: Rc<dyn Fn(Track)>,
 ) {
     let (sender, receiver) = async_channel::bounded::<HomeFeed>(1);
     let cookies = cookies_path.clone();
@@ -103,6 +106,7 @@ fn load_feed(
                 cache_path,
                 history_path,
                 on_select,
+                on_play,
             ));
             return;
         }
@@ -116,6 +120,7 @@ fn load_feed(
                 first.clone(),
                 &feed.sections[0].title,
                 on_select.clone(),
+                on_play.clone(),
             ));
         }
 
@@ -124,6 +129,7 @@ fn load_feed(
                 &section.title,
                 section.tracks,
                 on_select.clone(),
+                on_play.clone(),
             ));
         }
     });
@@ -162,7 +168,8 @@ fn error_state(
     cookies_path: PathBuf,
     cache_path: PathBuf,
     history_path: PathBuf,
-    on_select: impl Fn(Track) + 'static + Clone,
+    on_select: Rc<dyn Fn(Track)>,
+    on_play: Rc<dyn Fn(Track)>,
 ) -> gtk::Widget {
     let box_ = gtk::Box::new(gtk::Orientation::Vertical, 12);
     box_.set_valign(gtk::Align::Center);
@@ -188,6 +195,7 @@ fn error_state(
             cache_path.clone(),
             history_path.clone(),
             on_select.clone(),
+            on_play.clone(),
         );
     });
 
@@ -293,14 +301,13 @@ fn shortcut_tile(shortcut: &Shortcut) -> gtk::Widget {
 }
 
 /// The single big hero card, anchored to a real track from the first
-/// loaded row (see `load_feed`) — art, title and artist all come from
-/// `track`, and its play button sends the real `track` (with a real
-/// `url`), not a placeholder. The `section_title` is shown as the
-/// eyebrow above the track title (e.g. "Quick picks", "Listen again").
+/// loaded row (see `load_feed`). Clicking the card navigates to detail.
+/// The play button plays immediately.
 fn build_hero_card(
     track: Track,
     section_title: &str,
-    on_select: impl Fn(Track) + 'static,
+    on_select: Rc<dyn Fn(Track)>,
+    on_play: Rc<dyn Fn(Track)>,
 ) -> gtk::Widget {
     let card = gtk::Box::new(gtk::Orientation::Horizontal, 16);
     card.add_css_class("card");
@@ -352,9 +359,24 @@ fn build_hero_card(
     play_button.add_css_class("circular");
     play_button.add_css_class("suggested-action");
     play_button.set_valign(gtk::Align::Center);
-    play_button.connect_clicked(move |_| {
-        on_select(track.clone());
-    });
+    {
+        let on_play = on_play.clone();
+        let track_clone = track.clone();
+        play_button.connect_clicked(move |_| {
+            on_play(track_clone.clone());
+        });
+    }
+
+    // Clicking the text area navigates to detail.
+    {
+        let text_click = gtk::GestureClick::new();
+        let track_for_nav = track.clone();
+        let on_select_for_nav = on_select.clone();
+        text_click.connect_pressed(move |_, _, _, _| {
+            on_select_for_nav(track_for_nav.clone());
+        });
+        text_box.add_controller(text_click);
+    }
 
     card.append(&art);
     card.append(&text_box);
@@ -362,12 +384,12 @@ fn build_hero_card(
     card.upcast()
 }
 
-/// A titled, horizontally-scrolling row of cards — same idea as the
-/// results list in `search_view.rs`, just laid out sideways.
+/// A titled, horizontally-scrolling row of cards.
 fn build_row(
     title: &str,
     tracks: Vec<Track>,
-    on_select: impl Fn(Track) + 'static + Clone,
+    on_select: Rc<dyn Fn(Track)>,
+    on_play: Rc<dyn Fn(Track)>,
 ) -> gtk::Box {
     let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
 
@@ -378,8 +400,7 @@ fn build_row(
 
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 14);
     for track in tracks {
-        let on_select = on_select.clone();
-        row.append(&track_card(track, on_select));
+        row.append(&track_card(track, on_select.clone(), on_play.clone()));
     }
 
     let scroller = gtk::ScrolledWindow::new();
@@ -391,14 +412,13 @@ fn build_row(
     section
 }
 
-/// A single card: art placeholder (or fetched thumbnail once a track has a
-/// `thumbnail_url`) + title + artist, wrapped in a `Button` so the whole
-/// card is clickable — matches `search_view.rs` treating a full
-/// `ActionRow` as activatable rather than needing a separate play icon.
-fn track_card(track: Track, on_select: impl Fn(Track) + 'static) -> gtk::Widget {
+/// A single card with hover play icon. Clicking the card navigates to
+/// detail. Hovering shows a play button that plays immediately.
+fn track_card(track: Track, on_select: Rc<dyn Fn(Track)>, on_play: Rc<dyn Fn(Track)>) -> gtk::Widget {
     let card = gtk::Box::new(gtk::Orientation::Vertical, 6);
     card.set_width_request(150);
 
+    // Art with hover play overlay.
     let art_frame = gtk::Frame::new(None);
     art_frame.add_css_class("card");
     art_frame.add_css_class("home-art");
@@ -420,6 +440,44 @@ fn track_card(track: Track, on_select: impl Fn(Track) + 'static) -> gtk::Widget 
         });
     }
 
+    let overlay = gtk::Overlay::new();
+    overlay.set_child(Some(&art_frame));
+
+    let play_button = gtk::Button::from_icon_name("media-playback-start-symbolic");
+    play_button.add_css_class("circular");
+    play_button.add_css_class("suggested-action");
+    play_button.set_halign(gtk::Align::End);
+    play_button.set_valign(gtk::Align::End);
+    play_button.set_margin_end(8);
+    play_button.set_margin_bottom(8);
+    play_button.set_visible(false);
+    {
+        let on_play = on_play.clone();
+        let track_clone = track.clone();
+        let play_click = gtk::GestureClick::new();
+        play_click.set_propagation_phase(gtk::PropagationPhase::Capture);
+        play_click.connect_pressed(move |gesture, _, _, _| {
+            on_play(track_clone.clone());
+            gesture.set_state(gtk::EventSequenceState::Claimed);
+        });
+        play_button.add_controller(play_click);
+    }
+    overlay.add_overlay(&play_button);
+
+    // Hover: show/hide play button.
+    {
+        let enter_button = play_button.clone();
+        let motion = gtk::EventControllerMotion::new();
+        motion.connect_enter(move |_, _, _| {
+            enter_button.set_visible(true);
+        });
+        let leave_button = play_button.clone();
+        motion.connect_leave(move |_| {
+            leave_button.set_visible(false);
+        });
+        overlay.add_controller(motion);
+    }
+
     let title_label = gtk::Label::new(Some(&track.title));
     title_label.add_css_class("heading");
     title_label.set_halign(gtk::Align::Start);
@@ -433,15 +491,23 @@ fn track_card(track: Track, on_select: impl Fn(Track) + 'static) -> gtk::Widget 
     artist_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
     artist_label.set_max_width_chars(18);
 
-    card.append(&art_frame);
+    card.append(&overlay);
     card.append(&title_label);
     card.append(&artist_label);
 
+    // Clicking the card navigates to detail.
     let button = gtk::Button::new();
     button.add_css_class("flat");
     button.add_css_class("home-card");
     button.set_child(Some(&card));
-    button.connect_clicked(move |_| on_select(track.clone()));
+    {
+        let on_select = on_select.clone();
+        let track_clone = track.clone();
+        button.connect_clicked(move |_| {
+            eprintln!("[home_card] Card clicked: title={}, kind={:?}", track_clone.title, track_clone.media_kind());
+            on_select(track_clone.clone());
+        });
+    }
 
     button.upcast()
 }

@@ -13,6 +13,7 @@ Low-risk fixes that clean up inconsistencies and improve immediate hygiene.
 Melofin is a binary application. Cargo recommends tracking `Cargo.lock` for binaries. Remove the line from `.gitignore`.
 
 **File:** `.gitignore`
+
 - Remove the `Cargo.lock` line
 
 ### 1.2 Deduplicate `USER_AGENT` Constant
@@ -20,6 +21,7 @@ Melofin is a binary application. Cargo recommends tracking `Cargo.lock` for bina
 `innertube.rs` defines `USER_AGENT` as a `pub(crate) const`, but `user.rs` hardcodes the same string. Use the shared constant everywhere.
 
 **Files:**
+
 - `src/user.rs:58` — Replace inline string with `crate::innertube::USER_AGENT`
 - Verify `src/innertube.rs:15` is `pub(crate)` (already is)
 
@@ -28,6 +30,7 @@ Melofin is a binary application. Cargo recommends tracking `Cargo.lock` for bina
 `"1.20250710.01.00"` appears in 3+ files. Centralize in `innertube.rs` and import everywhere.
 
 **Files:**
+
 - `src/innertube.rs` — Ensure `CLIENT_VERSION` is `pub(crate)`
 - `src/user.rs` — Replace inline string with `crate::innertube::CLIENT_VERSION`
 - `src/home_feed.rs` — Replace inline strings in tests with the constant (or a local const if cfg(test) makes it awkward)
@@ -37,6 +40,7 @@ Melofin is a binary application. Cargo recommends tracking `Cargo.lock` for bina
 `user.rs:56` logs cookie names at `info!` level. This leaks metadata in production logs.
 
 **Files:**
+
 - `src/user.rs:56` — Change `tracing::info!` to `tracing::debug!`
 
 ### 1.5 Update README to Match Current Source Structure
@@ -44,6 +48,7 @@ Melofin is a binary application. Cargo recommends tracking `Cargo.lock` for bina
 The README lists `bin/search_test.rs`, `bin/ui_shell.rs`, and a `src/bin/` directory that don't exist.
 
 **Files:**
+
 - `README.md` — Update the "Project Structure" section to reflect the actual `src/` layout with `ui/` subdirectory
 - Remove references to `search-test` and `ui-shell` binaries, or add a note that they were removed
 
@@ -52,6 +57,7 @@ The README lists `bin/search_test.rs`, `bin/ui_shell.rs`, and a `src/bin/` direc
 The 293-line test in `home_feed.rs` makes real HTTP requests and writes to `doc/`. It should not run in CI or `cargo test`.
 
 **Files:**
+
 - `src/home_feed.rs` — Add `#[ignore]` attribute to the `probe_browse` test function
 - Add a comment explaining it requires network + valid cookies
 
@@ -101,6 +107,7 @@ pub(crate) fn build_innertube_request(
 ```
 
 **Files to update:**
+
 - `src/innertube.rs` — Add `build_innertube_request()`, refactor `browse_request` to use it
 - `src/user.rs` — Refactor `fetch_profile_from_account_menu` to use it
 - `src/home_feed.rs` — Refactor `probe_browse` test to use it (if practical)
@@ -122,6 +129,7 @@ pub fn read_and_validate_cookies(cookies_path: &Path) -> anyhow::Result<String> 
 ```
 
 **Files to update:**
+
 - `src/user.rs` — Add `read_and_validate_cookies()`
 - `src/innertube.rs` — Replace inline pattern at lines 30-36
 - `src/liked_songs.rs` — Replace inline pattern at lines 18-24
@@ -146,6 +154,7 @@ impl ThumbnailStack {
 ```
 
 **Files to update:**
+
 - `src/ui/thumbnail_widget.rs` — Add `ThumbnailStack` type
 - `src/ui/player_bar.rs` — Replace inline art-stack pattern with `ThumbnailStack`
 - `src/ui/now_playing_panel.rs` — Replace inline art-stack pattern with `ThumbnailStack`
@@ -169,6 +178,7 @@ pub fn build_track_row(track: &Track, on_activate: impl Fn() + 'static) -> adw::
 ```
 
 **Files to update:**
+
 - `src/ui/mod.rs` or new `src/ui/row_builder.rs` — Add `build_track_row()`
 - `src/ui/search_view.rs` — Use `build_track_row()` in result rendering
 - `src/ui/liked_songs_view.rs` — Use `build_track_row()` in `append_page`
@@ -240,6 +250,7 @@ jobs:
 Enforce clippy rules project-wide so individual developers don't have to remember flags.
 
 **File:** `Cargo.toml`
+
 ```toml
 [lints.clippy]
 unwrap_used = "warn"
@@ -253,6 +264,7 @@ cast_possible_truncation = "warn"
 Automated vulnerability and license scanning for a project that handles auth cookies.
 
 **Files:**
+
 - Create `deny.toml` at project root (use `cargo deny init` to scaffold, then customize)
 - Run `cargo deny check` in CI
 
@@ -261,6 +273,7 @@ Automated vulnerability and license scanning for a project that handles auth coo
 Use a simple shell script or `git-hooks` crate:
 
 **File:** `.git/hooks/pre-commit` (or use a crate manager)
+
 ```bash
 #!/bin/sh
 cargo fmt --check || exit 1
@@ -286,6 +299,7 @@ Flatpak is the standard distribution method for Linux GTK4 apps.
 **File:** `dev.melofin.Melofin.yml` (Flatpak manifest)
 
 Key elements:
+
 - Base runtime: `org.gnome.Platform` (includes GTK4 + libadwaita)
 - Build with `cargo build --release`
 - Bundle `mpv` and `yt-dlp` as runtime dependencies, or declare them as `finish-args` permissions
@@ -296,6 +310,7 @@ Key elements:
 **File:** `dev.melofin.Melofin.metainfo.xml`
 
 Required for Flattub/GNOME Software listing:
+
 - App description, screenshots, release history
 - Component metadata (categories, keywords, license)
 
@@ -353,6 +368,7 @@ Apply to all MPRIS transport control handlers.
 ### 5.4 SQLite Persistence
 
 Replace flat-file caching with SQLite for:
+
 - Home feed cache (queryable, structured)
 - Liked songs offline cache
 - User preferences
@@ -365,12 +381,12 @@ Wire up the existing placeholder buttons (shuffle, prev, next, repeat) and build
 
 ## Summary
 
-| Phase | Scope | Estimated Time | Prerequisites |
-|-------|-------|---------------|---------------|
-| 1 | Quick wins | ~2 hours | None |
-| 2 | Code deduplication | ~4 hours | Phase 1 |
-| 3 | Dev tooling | ~3 hours | Phase 1 |
-| 4 | Packaging | ~half day | Phases 1-3 |
-| 5 | Future features | Ongoing | Phases 1-3 |
+| Phase | Scope              | Estimated Time | Prerequisites |
+| ----- | ------------------ | -------------- | ------------- |
+| 1     | Quick wins         | ~2 hours       | None          |
+| 2     | Code deduplication | ~4 hours       | Phase 1       |
+| 3     | Dev tooling        | ~3 hours       | Phase 1       |
+| 4     | Packaging          | ~half day      | Phases 1-3    |
+| 5     | Future features    | Ongoing        | Phases 1-3    |
 
 Phases 1 and 3 can be done in parallel. Phase 2 depends on Phase 1 (constants must be centralized first). Phase 4 benefits from having CI in place (Phase 3). Phase 5 items are independent of each other and can be tackled in any order.
