@@ -29,6 +29,9 @@ pub struct PlayerState {
     /// one. Kept here rather than threaded through `mpris::NowPlaying`
     /// since this only needs to reach our own UI, not MPRIS metadata.
     pub thumbnail_url: String,
+    /// Browse ID of the current artist (UC-prefixed channel ID), used to
+    /// fetch artist bios in the now-playing panel.
+    pub artist_browse_id: Option<String>,
 }
 
 pub struct PlayerHandle {
@@ -83,6 +86,7 @@ async fn run(
     // PlayerState::thumbnail_url doc comment), so it's tracked separately
     // here instead of widening that struct's contract.
     let mut current_thumbnail_url = String::new();
+    let mut current_artist_browse_id: Option<String> = None;
 
     // Drives the player bar's seek scale/time labels. Kept separate from
     // mpris.rs's own 500ms poll loop (that one updates MPRIS metadata for
@@ -102,6 +106,7 @@ async fn run(
                             artist: track.artist.clone(),
                         };
                         current_thumbnail_url = track.thumbnail_url.clone();
+                        current_artist_browse_id = track.artist_browse_id.clone();
                         if let Err(e) = mpv.load(&track.url).await {
                             tracing::warn!("mpv load failed: {e}");
                             continue;
@@ -136,6 +141,7 @@ async fn run(
                                 position_seconds: 0.0,
                                 duration_seconds: 0.0,
                                 thumbnail_url: current_thumbnail_url.clone(),
+                                artist_browse_id: current_artist_browse_id.clone(),
                             })
                             .await;
                     }
@@ -172,6 +178,7 @@ async fn run(
                         position_seconds: position,
                         duration_seconds: duration,
                         thumbnail_url: current_thumbnail_url.clone(),
+                        artist_browse_id: current_artist_browse_id.clone(),
                     })
                     .await;
             }

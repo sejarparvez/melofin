@@ -16,6 +16,8 @@ pub struct Track {
     pub duration: Option<String>,
     #[serde(default)]
     pub album: Option<String>,
+    #[serde(default)]
+    pub artist_browse_id: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -91,6 +93,7 @@ pub fn parse_search_output(raw: &str) -> Vec<Track> {
                     track_number: None,
                     duration: None,
                     album: None,
+                    artist_browse_id: None,
                 })
             } else {
                 None
@@ -135,6 +138,7 @@ mod tests {
                     track_number: None,
                     duration: None,
                     album: None,
+                    artist_browse_id: None,
                 },
                 Track {
                     title: "Song B".into(),
@@ -144,6 +148,7 @@ mod tests {
                     track_number: None,
                     duration: None,
                     album: None,
+                    artist_browse_id: None,
                 },
             ]
         );

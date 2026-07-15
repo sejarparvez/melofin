@@ -334,7 +334,7 @@ fn build_ui(app: &adw::Application) {
     let _search_view = search_view;
 
     let player_bar = PlayerBar::new(handle.commands.clone());
-    let now_playing_panel = NowPlayingPanel::new();
+    let now_playing_panel = NowPlayingPanel::new(auth.cookies_path().to_path_buf());
 
     // Library sidebar: "Liked Songs" click switches the stack.
     // We create the sidebar after the stack so we can clone the stack into the callback.

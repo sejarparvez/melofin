@@ -568,6 +568,7 @@ mod tests {
                     track_number: None,
                     duration: None,
                     album: None,
+                    artist_browse_id: None,
                 }],
             }],
         };

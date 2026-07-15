@@ -2,8 +2,8 @@
 //! playback state, updated the same way as `player_bar.rs::update` — this
 //! is the one sidebar element that isn't placeholder data, since it's just
 //! showing what `player.rs` already tracks. The "About the artist" blurb
-//! below it stays static text: there's no bio/metadata source wired up
-//! (only `search.rs`'s title/artist/thumbnail via yt-dlp exists today).
+//! fetches the artist's bio from YouTube Music's InnerTube API when the
+//! track changes.
 //!
 //! Width note: `pub widget` is a `ScrolledWindow`, not the content `Box`
 //! directly. Two rounds of trying to cap width purely via
@@ -21,9 +21,13 @@
 //! (or, with `hscrollbar_policy(Never)`, just relies on the child's own
 //! wrapping/ellipsizing within that fixed viewport) instead of growing.
 
+use std::cell::RefCell;
+use std::path::PathBuf;
+
 use crate::player::PlayerState;
 use crate::ui::thumbnail_widget::ThumbnailStack;
 use adw::prelude::*;
+use gtk::glib;
 
 /// Fixed width of the whole panel, in pixels. Every other size in here
 /// (`ART_SIZE`, the label `max_width_chars` calls) is derived from this
@@ -38,16 +42,16 @@ pub struct NowPlayingPanel {
     title_label: gtk::Label,
     artist_label: gtk::Label,
     thumbnail: ThumbnailStack,
-}
-
-impl Default for NowPlayingPanel {
-    fn default() -> Self {
-        Self::new()
-    }
+    about_body: gtk::Label,
+    cookies_path: PathBuf,
+    /// The artist name whose bio is currently being displayed or fetched.
+    /// Used to avoid re-fetching when the same artist plays again, and to
+    /// cancel (skip) stale fetches when the track changes mid-fetch.
+    current_artist: RefCell<String>,
 }
 
 impl NowPlayingPanel {
-    pub fn new() -> Self {
+    pub fn new(cookies_path: PathBuf) -> Self {
         let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
         content.set_margin_top(10);
         content.set_margin_bottom(10);
@@ -88,10 +92,7 @@ impl NowPlayingPanel {
         about_heading.set_halign(gtk::Align::Start);
         about_heading.set_margin_top(12);
 
-        let about_body = gtk::Label::new(Some(
-            "Artist bios aren't wired up yet — this panel will show real \
-             info once a metadata source is connected.",
-        ));
+        let about_body = gtk::Label::new(Some(""));
         about_body.add_css_class("dim-label");
         about_body.add_css_class("caption");
         about_body.set_wrap(true);
@@ -131,6 +132,9 @@ impl NowPlayingPanel {
             title_label,
             artist_label,
             thumbnail,
+            about_body,
+            cookies_path,
+            current_artist: RefCell::new(String::new()),
         }
     }
 
@@ -145,5 +149,77 @@ impl NowPlayingPanel {
         self.title_label.set_label(title);
         self.artist_label.set_label(&state.artist);
         self.thumbnail.update(&state.thumbnail_url, ART_SIZE);
+
+        // Fetch artist bio if artist changed.
+        let new_browse_id = state.artist_browse_id.clone();
+        let artist_name = state.artist.clone();
+        let mut current = self.current_artist.borrow_mut();
+        if *current == artist_name {
+            return; // same artist, no need to re-fetch
+        }
+        *current = artist_name.clone();
+        drop(current);
+
+        // Show loading state immediately.
+        self.about_body.set_label("Loading bio...");
+
+        // Spawn a background fetch. The `current_browse_id` cell is used
+        // as a generation counter: if the track changes while we're
+        // fetching, the stale closure will see a mismatch and bail out.
+        let about_body = self.about_body.clone();
+        let cell = self.current_artist.clone();
+        let cookies_path = self.cookies_path.clone();
+
+        let (sender, receiver) = async_channel::bounded::<(Option<String>, String)>(1);
+        let fetch_cookies = cookies_path.clone();
+        let artist_for_thread = artist_name.clone();
+        std::thread::spawn(move || {
+            // If no browse ID, search by artist name to find one.
+            let browse_id = new_browse_id.or_else(|| {
+                let cookie_header = match crate::user::read_and_validate_cookies(&fetch_cookies) {
+                    Ok(h) => h,
+                    Err(_) => return None,
+                };
+                let html = match ureq::get("https://music.youtube.com")
+                    .set("Cookie", &cookie_header)
+                    .set("User-Agent", crate::innertube::USER_AGENT)
+                    .timeout(std::time::Duration::from_secs(15))
+                    .call()
+                    .and_then(|r| r.into_string().map_err(|e| e.into()))
+                {
+                    Ok(h) => h,
+                    Err(_) => return None,
+                };
+                let api_key = crate::user::extract_innertube_api_key(&html)?;
+                crate::innertube::search_artist_browse_id(
+                    &cookie_header,
+                    &api_key,
+                    &artist_for_thread,
+                )
+            });
+
+            let Some(browse_id) = browse_id else {
+                let _ = sender.send_blocking((None, String::new()));
+                return;
+            };
+
+            let description =
+                crate::detail_fetch::fetch_artist_description(&fetch_cookies, &browse_id);
+            let _ = sender.send_blocking((Some(browse_id), description));
+        });
+
+        glib::spawn_future_local(async move {
+            let Ok((_browse_id, description)) = receiver.recv().await else {
+                return;
+            };
+            // Only update if we're still on the same artist.
+            if *cell.borrow() == artist_name {
+                if description.is_empty() {
+                    about_body.set_label("");
+                } else {
+                    about_body.set_label(&description);
+                }
+            }
+        });
     }
 }

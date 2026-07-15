@@ -83,6 +83,64 @@ pub fn fetch_detail(cookies_path: &Path, browse_id: &str) -> Result<DetailResult
     })
 }
 
+/// Fetches just the artist description (bio) by browsing their UC-prefixed
+/// channel ID. Returns the description text, or an empty string on failure.
+///
+/// Blocking — call from a background thread.
+pub fn fetch_artist_description(cookies_path: &Path, browse_id: &str) -> String {
+    let Ok(cookie_header) = read_and_validate_cookies(cookies_path) else {
+        return String::new();
+    };
+
+    let Ok(html) = ureq::get("https://music.youtube.com")
+        .set("Cookie", &cookie_header)
+        .set("User-Agent", crate::innertube::USER_AGENT)
+        .timeout(std::time::Duration::from_secs(15))
+        .call()
+        .and_then(|r| r.into_string().map_err(|e| e.into()))
+    else {
+        return String::new();
+    };
+
+    let Some(api_key) = crate::user::extract_innertube_api_key(&html) else {
+        return String::new();
+    };
+
+    let Ok(json) = browse_request(&cookie_header, &api_key, Some(browse_id), None) else {
+        return String::new();
+    };
+
+    // Artist pages return the header at the top level, not nested in
+    // twoColumnBrowseResultsRenderer. Try multiple paths.
+    let header = json.pointer("/header/musicImmersiveHeaderRenderer")
+        .or_else(|| json.pointer("/header/musicResponsiveHeaderRenderer"))
+        .or_else(|| json.pointer("/contents/twoColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents/0/musicImmersiveHeaderRenderer"))
+        .or_else(|| json.pointer("/contents/twoColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents/0/musicResponsiveHeaderRenderer"));
+
+    let desc = header
+        .map(parse_description)
+        .unwrap_or_default();
+
+    // If no description from header, look for musicDescriptionShelfRenderer.
+    if !desc.is_empty() {
+        return desc;
+    }
+
+    json.pointer("/contents/twoColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents/0/musicDescriptionShelfRenderer/description/runs")
+        .or_else(|| json.pointer("/contents/twoColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents/1/musicDescriptionShelfRenderer/description/runs"))
+        .or_else(|| {
+            header.and_then(|h| h.pointer("/description/bodyBodyRenderer/runs"))
+        })
+        .and_then(|r| r.as_array())
+        .map(|runs| {
+            runs.iter()
+                .filter_map(|r| r.get("text").and_then(|t| t.as_str()))
+                .collect::<Vec<_>>()
+                .join("")
+        })
+        .unwrap_or_default()
+}
+
 /// Parses header metadata from the browse response. Tries
 /// `musicResponsiveHeaderRenderer` first (used by playlists/albums),
 /// then `musicImmersiveHeaderRenderer` (used by artists).

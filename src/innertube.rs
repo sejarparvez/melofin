@@ -258,6 +258,119 @@ pub(crate) fn browse_request(
     serde_json::from_str(&text).context("browse response is not valid JSON")
 }
 
+/// Searches YouTube Music for an artist by name and returns their UC-prefixed
+/// browse ID, or `None` if no artist match is found.
+///
+/// Blocking — call from a background thread.
+pub(crate) fn search_artist_browse_id(
+    cookie_header: &str,
+    api_key: &str,
+    artist_name: &str,
+) -> Option<String> {
+    let url = format!(
+        "https://music.youtube.com/youtubei/v1/search?key={api_key}&prettyPrint=false"
+    );
+
+    let body = serde_json::json!({
+        "context": {
+            "client": {
+                "clientName": "WEB_REMIX",
+                "clientVersion": CLIENT_VERSION,
+                "hl": "en",
+                "gl": "US"
+            }
+        },
+        "query": artist_name
+    });
+
+    let text = build_innertube_request(&url, cookie_header)
+        .send_string(&body.to_string())
+        .ok()?
+        .into_string()
+        .ok()?;
+
+    let json: serde_json::Value = serde_json::from_str(&text).ok()?;
+
+    // Collect all musicResponsiveListItemRenderer items from the response.
+    let all_items = collect_music_list_items(&json);
+
+    for item in &all_items {
+        // Try flexColumns first (most common for search results).
+        if let Some(browse_id) = item
+            .pointer("/flexColumns/0/musicResponsiveListItemFlexColumnRenderer/text/runs/0/navigationEndpoint/browseEndpoint/browseId")
+            .and_then(|id| id.as_str())
+            .filter(|id| id.starts_with("UC"))
+        {
+            return Some(browse_id.to_string());
+        }
+        // Try the top-level navigationEndpoint (some items have it directly).
+        if let Some(browse_id) = item
+            .pointer("/navigationEndpoint/browseEndpoint/browseId")
+            .and_then(|id| id.as_str())
+            .filter(|id| id.starts_with("UC"))
+        {
+            return Some(browse_id.to_string());
+        }
+    }
+
+    // Fallback: look for any UC-prefixed string in the JSON that looks like
+    // a browse ID, by scanning musicResponsiveListItemRenderer items more broadly.
+    for item in &all_items {
+        if let Some(obj) = item.as_object() {
+            // Check if the item has a title run with a browseEndpoint.
+            if let Some(browse_id) = obj
+                .get("flexColumns")
+                .and_then(|fc| fc.as_array())
+                .and_then(|cols| cols.first())
+                .and_then(|col| col.pointer("/musicResponsiveListItemFlexColumnRenderer/text/runs"))
+                .and_then(|runs| runs.as_array())
+                .and_then(|r| r.first())
+                .and_then(|run| run.pointer("/navigationEndpoint/browseEndpoint/browseId"))
+                .and_then(|id| id.as_str())
+                .filter(|id| id.starts_with("UC"))
+            {
+                return Some(browse_id.to_string());
+            }
+        }
+    }
+
+    None
+}
+
+/// Recursively collects all `musicResponsiveListItemRenderer` values from a
+/// JSON tree. Handles various nesting depths used by InnerTube responses.
+fn collect_music_list_items(json: &serde_json::Value) -> Vec<&serde_json::Value> {
+    let mut items = Vec::new();
+    collect_music_list_items_inner(json, &mut items, 0);
+    items
+}
+
+fn collect_music_list_items_inner<'a>(
+    json: &'a serde_json::Value,
+    items: &mut Vec<&'a serde_json::Value>,
+    depth: usize,
+) {
+    if depth > 12 {
+        return; // prevent infinite recursion
+    }
+    match json {
+        serde_json::Value::Object(map) => {
+            if let Some(renderer) = map.get("musicResponsiveListItemRenderer") {
+                items.push(renderer);
+            }
+            for val in map.values() {
+                collect_music_list_items_inner(val, items, depth + 1);
+            }
+        }
+        serde_json::Value::Array(arr) => {
+            for val in arr {
+                collect_music_list_items_inner(val, items, depth + 1);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// Parses `musicCarouselShelfRenderer` sections from the initial browse
 /// response. The response may use either `singleColumnBrowseResultsRenderer`
 /// or `twoColumnBrowseResultsRenderer` — we try both.
@@ -434,6 +547,25 @@ pub(crate) fn parse_song_item(renderer: &serde_json::Value) -> Option<Track> {
                 .map(|s| s.to_string())
         });
 
+    // Artist browse ID: extract UC-prefixed channel ID from artist link in flexColumns.
+    let artist_browse_id = renderer
+        .pointer("/flexColumns/1/musicResponsiveListItemFlexColumnRenderer/text/runs")
+        .and_then(|r| r.as_array())
+        .and_then(|runs| {
+            runs.iter()
+                .find(|run| {
+                    run.pointer("/navigationEndpoint/browseEndpoint/browseId")
+                        .and_then(|id| id.as_str())
+                        .is_some_and(|id| id.starts_with("UC"))
+                })
+                .and_then(|run| {
+                    run.pointer("/navigationEndpoint/browseEndpoint/browseId")
+                        .and_then(|id| id.as_str())
+                        .filter(|s| !s.is_empty())
+                        .map(|s| s.to_string())
+                })
+        });
+
     Some(Track {
         title: title.to_string(),
         artist: artist.to_string(),
@@ -442,6 +574,7 @@ pub(crate) fn parse_song_item(renderer: &serde_json::Value) -> Option<Track> {
         track_number,
         duration,
         album,
+        artist_browse_id,
     })
 }
 
@@ -489,6 +622,31 @@ fn parse_two_row_item(renderer: &serde_json::Value) -> Option<Track> {
             .as_str()?,
     );
 
+    // Artist browse ID: try longBylineText, shortBylineText, then subtitle runs.
+    // Home feed song cards store the artist channel link in longBylineText/shortBylineText
+    // with a browseEndpoint, while subtitle runs are usually plain text.
+    let artist_browse_id = ["longBylineText", "shortBylineText", "subtitle"]
+        .iter()
+        .find_map(|field| {
+            renderer
+                .pointer(&format!("/{field}/runs"))
+                .and_then(|r| r.as_array())
+                .and_then(|runs| {
+                    runs.iter()
+                        .find(|run| {
+                            run.pointer("/navigationEndpoint/browseEndpoint/browseId")
+                                .and_then(|id| id.as_str())
+                                .is_some_and(|id| id.starts_with("UC"))
+                        })
+                        .and_then(|run| {
+                            run.pointer("/navigationEndpoint/browseEndpoint/browseId")
+                                .and_then(|id| id.as_str())
+                                .filter(|s| !s.is_empty())
+                                .map(|s| s.to_string())
+                        })
+                })
+        });
+
     Some(Track {
         title: title.to_string(),
         artist: artist.to_string(),
@@ -497,5 +655,6 @@ fn parse_two_row_item(renderer: &serde_json::Value) -> Option<Track> {
         track_number: None,
         duration: None,
         album: None,
+        artist_browse_id,
     })
 }

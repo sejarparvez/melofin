@@ -103,6 +103,7 @@ pub fn recently_played(events: &[PlayEvent], limit: usize) -> Vec<Track> {
             track_number: None,
             duration: None,
             album: None,
+            artist_browse_id: None,
         })
         .collect()
 }
@@ -132,6 +133,7 @@ pub fn top_tracks(events: &[PlayEvent], limit: usize) -> Vec<Track> {
             track_number: None,
             duration: None,
             album: None,
+            artist_browse_id: None,
         })
         .collect()
 }
