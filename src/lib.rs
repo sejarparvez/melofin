@@ -7,6 +7,7 @@ pub mod mpris;
 pub mod mpv;
 pub mod play_history;
 pub mod player;
+pub mod queue;
 pub mod search;
 pub mod thumbnail;
 pub mod ui;

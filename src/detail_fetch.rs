@@ -50,7 +50,7 @@ pub fn fetch_detail(cookies_path: &Path, browse_id: &str) -> Result<DetailResult
     let metadata = parse_metadata(&json);
     let mut tracks = parse_tracks(&json);
 
-    tracing::debug!(track_count = tracks.len(), "initial browse response parsed");
+    tracing::debug!(track_count = tracks.len(), "browse response parsed");
 
     // Follow continuation tokens for large playlists.
     let mut current_token = extract_continuation(&json);
@@ -117,9 +117,7 @@ pub fn fetch_artist_description(cookies_path: &Path, browse_id: &str) -> String 
         .or_else(|| json.pointer("/contents/twoColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents/0/musicImmersiveHeaderRenderer"))
         .or_else(|| json.pointer("/contents/twoColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents/0/musicResponsiveHeaderRenderer"));
 
-    let desc = header
-        .map(parse_description)
-        .unwrap_or_default();
+    let desc = header.map(parse_description).unwrap_or_default();
 
     // If no description from header, look for musicDescriptionShelfRenderer.
     if !desc.is_empty() {
@@ -205,7 +203,8 @@ fn parse_responsive_header(header: &serde_json::Value) -> DetailMetadata {
         })
         .or_else(|| {
             // Fallback: subtitle runs (skip type labels and separators).
-            header.pointer("/subtitle/runs")
+            header
+                .pointer("/subtitle/runs")
                 .and_then(|r| r.as_array())
                 .and_then(|runs| {
                     runs.iter()
@@ -338,28 +337,23 @@ fn normalize_thumbnail_url(url: &str) -> String {
 /// Parses tracks from the initial browse response. Looks for tracks in
 /// `musicShelfRenderer` or `musicPlaylistShelfRenderer` contents.
 fn parse_tracks(json: &serde_json::Value) -> Vec<Track> {
-    tracing::debug!("parse_tracks: looking for tracks");
     // Primary: musicShelfRenderer in sectionListRenderer.
     if let Some(shelf) = json.pointer("/contents/twoColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents/0/musicShelfRenderer") {
-        tracing::debug!("found tracks in tabs/sectionListRenderer");
         return parse_shelf_tracks(shelf);
     }
 
     // Fallback: singleColumn layout.
     if let Some(shelf) = json.pointer("/contents/singleColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents/0/musicShelfRenderer") {
-        tracing::debug!("found tracks in singleColumn");
         return parse_shelf_tracks(shelf);
     }
 
     // Fallback: musicPlaylistShelfRenderer (used by some playlists).
     if let Some(shelf) = json.pointer("/contents/twoColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents/0/musicPlaylistShelfRenderer") {
-        tracing::debug!("found tracks in musicPlaylistShelfRenderer");
         return parse_shelf_tracks(shelf);
     }
 
     // Fallback: secondaryContents (used by albums — tracks are here, not in main contents).
     if let Some(shelf) = json.pointer("/contents/twoColumnBrowseResultsRenderer/secondaryContents/sectionListRenderer/contents/0/musicShelfRenderer") {
-        tracing::debug!("found tracks in secondaryContents");
         return parse_shelf_tracks(shelf);
     }
 
@@ -384,8 +378,9 @@ fn parse_tracks(json: &serde_json::Value) -> Vec<Track> {
     }
 
     // Fallback: scan secondaryContents for any shelf.
-    if let Some(contents) = json.pointer("/contents/twoColumnBrowseResultsRenderer/secondaryContents/sectionListRenderer/contents")
-        && let Some(arr) = contents.as_array()
+    if let Some(contents) = json.pointer(
+        "/contents/twoColumnBrowseResultsRenderer/secondaryContents/sectionListRenderer/contents",
+    ) && let Some(arr) = contents.as_array()
     {
         for item in arr {
             if let Some(shelf) = item.get("musicShelfRenderer") {
@@ -402,7 +397,6 @@ fn parse_tracks(json: &serde_json::Value) -> Vec<Track> {
 
 fn parse_shelf_tracks(shelf: &serde_json::Value) -> Vec<Track> {
     let contents = shelf.get("contents").and_then(|c| c.as_array());
-    tracing::debug!(count = contents.map(|a| a.len()), "parse_shelf_tracks");
     match contents {
         Some(arr) => {
             let tracks: Vec<Track> = arr.iter()
@@ -417,7 +411,6 @@ fn parse_shelf_tracks(shelf: &serde_json::Value) -> Vec<Track> {
                     renderer.and_then(parse_song_item)
                 })
                 .collect();
-            tracing::debug!(parsed = tracks.len(), "parse_shelf_tracks done");
             tracks
         }
         None => {
@@ -431,7 +424,9 @@ fn parse_continuation_tracks(json: &serde_json::Value) -> Vec<Track> {
     if let Some(shelf) = json.pointer("/continuationContents/musicShelfContinuation") {
         return parse_shelf_tracks(shelf);
     }
-    if let Some(shelf) = json.pointer("/continuationContents/sectionListContinuation/contents/0/musicShelfRenderer") {
+    if let Some(shelf) =
+        json.pointer("/continuationContents/sectionListContinuation/contents/0/musicShelfRenderer")
+    {
         return parse_shelf_tracks(shelf);
     }
     if let Some(shelf) = json.pointer("/continuationContents/musicPlaylistShelfContinuation") {

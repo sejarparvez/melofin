@@ -1,7 +1,3 @@
-//! Liked Songs view — replaces the center content area when the user clicks
-//! "Liked Songs" in the library sidebar. Shows all liked songs with a
-//! "Show More" button for lazy display (20 tracks at a time).
-
 use crate::liked_songs::fetch_liked_songs;
 use crate::search::Track;
 use crate::ui::thumbnail_widget;
@@ -21,7 +17,7 @@ impl LikedSongsView {
     pub fn new(
         cookies_path: PathBuf,
         on_select: Rc<dyn Fn(Track)>,
-        _on_play: Rc<dyn Fn(Track)>,
+        on_play_from_list: Rc<dyn Fn(Vec<Track>, usize)>,
         on_back: Rc<dyn Fn()>,
     ) -> Self {
         let widget = gtk::Box::new(gtk::Orientation::Vertical, 0);
@@ -86,14 +82,15 @@ impl LikedSongsView {
         loading_box.append(&loading_label);
         list.append(&loading_box);
 
-        // --- Wire row activation (works for all rows, current and future) ---
+        // --- Wire row activation: play the full list starting at the clicked track ---
         {
             let all_tracks = all_tracks.clone();
-            let on_select = on_select.clone();
+            let on_play_from_list = on_play_from_list.clone();
             list.connect_row_activated(move |_list, row| {
                 let index = row.index() as usize;
                 if let Some(track) = all_tracks.borrow().get(index).cloned() {
-                    on_select(track);
+                    let _ = track; // unused; we pass the full list
+                    on_play_from_list(all_tracks.borrow().clone(), index);
                 }
             });
         }
@@ -146,10 +143,8 @@ impl LikedSongsView {
                     *all_tracks_clone.borrow_mut() = tracks;
                     displayed_clone.set(0);
 
-                    // Show first page.
                     append_page(&list_clone, &all_tracks_clone, &displayed_clone, &on_select);
 
-                    // Show/hide "Show More" based on whether more tracks exist.
                     let has_more = displayed_clone.get() < all_tracks_clone.borrow().len();
                     show_more_clone.set_visible(has_more);
                 }
@@ -167,7 +162,6 @@ impl LikedSongsView {
     }
 }
 
-/// Appends the next PAGE_SIZE tracks from `all_tracks` to `list`.
 fn append_page(
     list: &gtk::ListBox,
     all_tracks: &Rc<RefCell<Vec<Track>>>,

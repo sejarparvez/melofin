@@ -4,18 +4,18 @@ use crate::ui::thumbnail_widget;
 use adw::prelude::*;
 use std::rc::Rc;
 
-/// A scrollable view showing full metadata and track list for a
-/// playlist, album, or artist.
 pub struct DetailView {
     pub widget: gtk::ScrolledWindow,
 }
 
 impl DetailView {
     /// Builds a fully-loaded detail view from fetched metadata and tracks.
+    /// `on_play_from_list` receives the full track list + clicked index, so
+    /// clicking a track enqueues the entire list starting from that track.
     pub fn new(
         metadata: &DetailMetadata,
         tracks: &[Track],
-        on_play_track: Rc<dyn Fn(Track)>,
+        on_play_from_list: Rc<dyn Fn(Vec<Track>, usize)>,
         on_back: Rc<dyn Fn()>,
     ) -> Self {
         let content = gtk::Box::new(gtk::Orientation::Vertical, 16);
@@ -79,7 +79,6 @@ impl DetailView {
         artist_label.set_halign(gtk::Align::Start);
         artist_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
 
-        // Year + track count line
         let meta_text = match (metadata.year.is_empty(), metadata.track_count > 0) {
             (false, true) => format!("{} · {} tracks", metadata.year, metadata.track_count),
             (false, false) => metadata.year.clone(),
@@ -110,17 +109,17 @@ impl DetailView {
             text_col.append(&desc_label);
         }
 
-        // Play All button
+        // Play All button: enqueues the full list and starts at track 0.
         if !tracks.is_empty() {
             let play_all = gtk::Button::with_label("Play All");
             play_all.add_css_class("pill");
             play_all.add_css_class("suggested-action");
             play_all.set_halign(gtk::Align::Start);
             play_all.set_margin_top(8);
-            let first_track = tracks[0].clone();
-            let on_play_track = on_play_track.clone();
+            let all_tracks = tracks.to_vec();
+            let on_play_from_list = on_play_from_list.clone();
             play_all.connect_clicked(move |_| {
-                on_play_track(first_track.clone());
+                on_play_from_list(all_tracks.clone(), 0);
             });
             text_col.append(&play_all);
         }
@@ -143,14 +142,14 @@ impl DetailView {
             list.append(&thumbnail_widget::build_detail_track_row(track, i));
         }
 
-        // Wire row activation to play.
+        // Wire row activation: enqueue the full list starting at the clicked track.
         {
-            let tracks = tracks.to_vec();
-            let on_play_track = on_play_track.clone();
+            let all_tracks = tracks.to_vec();
+            let on_play_from_list = on_play_from_list.clone();
             list.connect_row_activated(move |_list, row| {
                 let index = row.index() as usize;
-                if let Some(track) = tracks.get(index) {
-                    on_play_track(track.clone());
+                if index < all_tracks.len() {
+                    on_play_from_list(all_tracks.clone(), index);
                 }
             });
         }
@@ -178,7 +177,7 @@ impl DetailView {
         spinner.set_spinning(true);
         spinner.set_size_request(32, 32);
 
-        let label = gtk::Label::new(Some("Loading details…"));
+        let label = gtk::Label::new(Some("Loading details\u{2026}"));
         label.add_css_class("dim-label");
 
         box_.append(&spinner);

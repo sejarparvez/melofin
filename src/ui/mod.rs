@@ -7,6 +7,7 @@ pub mod liked_songs_view;
 pub mod login_dialog;
 pub mod now_playing_panel;
 pub mod player_bar;
+pub mod queue_panel;
 pub mod search_view;
 pub mod thumbnail_widget;
 pub mod top_bar;

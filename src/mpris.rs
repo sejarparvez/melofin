@@ -1,40 +1,35 @@
 use crate::mpv::MpvController;
+use crate::player::PlayerCommand;
 use anyhow::Result;
 use mpris_server::{LoopStatus, Metadata, PlaybackStatus, Player, Time};
 use std::rc::Rc;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-/// Shared, mutable "now playing" info the MPRIS server reports.
 #[derive(Clone, Default)]
 pub struct NowPlaying {
     pub title: String,
     pub artist: String,
 }
 
-/// Starts the MPRIS server and wires its transport controls (play/pause/
-/// next/previous/seek/volume) to the mpv IPC controller.
-///
-/// `mpris_server::Player` is built on `Rc`/`RefCell` internally (it is
-/// intentionally single-threaded, not `Send`), so the event loop and the
-/// state-polling task below must run via `tokio::task::spawn_local` inside
-/// a `LocalSet`, not plain `tokio::spawn`. The caller (`main`) is
-/// responsible for driving this from inside `LocalSet::run_until`.
 pub async fn start(
     mpv: Arc<MpvController>,
     now_playing: Arc<Mutex<NowPlaying>>,
+    command_tx: async_channel::Sender<PlayerCommand>,
 ) -> Result<Rc<Player>> {
     let player = Player::builder("melofin")
         .identity("Melofin")
         .can_play(true)
         .can_pause(true)
         .can_seek(true)
-        .can_go_next(false) // wire up once a queue exists
-        .can_go_previous(false)
+        .can_go_next(true)
+        .can_go_previous(true)
         .can_control(true)
         .build()
         .await?;
     let player = Rc::new(player);
+
+    // -- Transport controls ---------------------------------------------------
 
     {
         let mpv = mpv.clone();
@@ -69,7 +64,6 @@ pub async fn start(
         let mpv = mpv.clone();
         player.connect_seek(move |_, offset| {
             let mpv = mpv.clone();
-            // Time is microsecond-precision (i64), not a std Duration.
             let offset_secs = offset.as_micros() as f64 / 1_000_000.0;
             tokio::spawn(async move {
                 let _ = mpv.seek_relative(offset_secs).await;
@@ -96,13 +90,24 @@ pub async fn start(
         });
     }
 
-    // Reasonable static defaults; loop/shuffle become meaningful once a
-    // queue exists (Build Step 4/5).
+    // Next/Previous go through the player command channel so the queue
+    // logic (shuffle history, repeat, etc.) is handled correctly.
+    {
+        let tx = command_tx.clone();
+        player.connect_next(move |_| {
+            let _ = tx.send_blocking(PlayerCommand::Next);
+        });
+    }
+    {
+        let tx = command_tx.clone();
+        player.connect_previous(move |_| {
+            let _ = tx.send_blocking(PlayerCommand::Previous);
+        });
+    }
+
     player.set_loop_status(LoopStatus::None).await?;
     player.set_shuffle(false).await?;
 
-    // `Player` is !Send (Rc-based), so its event loop and any task that
-    // touches it must be spawned locally, not with plain `tokio::spawn`.
     let run_player = player.clone();
     tokio::task::spawn_local(async move {
         run_player.run().await;
@@ -113,10 +118,6 @@ pub async fn start(
     Ok(player)
 }
 
-/// Periodically syncs mpv's actual playback state (paused/playing, position)
-/// into the MPRIS properties, so external controllers (waybar, GNOME/KDE
-/// media widgets, media keys) stay accurate even for state changes that
-/// didn't originate from an MPRIS call (e.g. the track ending naturally).
 fn poll_mpv_state(
     mpv: Arc<MpvController>,
     player: Rc<Player>,

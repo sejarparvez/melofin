@@ -1629,6 +1629,7 @@ dependencies = [
  "gtk4",
  "libadwaita",
  "mpris-server",
+ "rand",
  "rookie",
  "serde",
  "serde_json",

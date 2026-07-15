@@ -42,8 +42,7 @@ impl Track {
     /// Extracts the YouTube Music browse_id from a `browse/` URL.
     /// Returns `None` for song URLs (`watch?v=`).
     pub fn browse_id(&self) -> Option<&str> {
-        self.url
-            .strip_prefix("https://music.youtube.com/browse/")
+        self.url.strip_prefix("https://music.youtube.com/browse/")
     }
 }
 

@@ -49,12 +49,6 @@ impl UserProfile {
             return Self::guest();
         }
         // Debug: log cookie names being sent
-        let cookie_names: Vec<&str> = cookie_header
-            .split(';')
-            .map(|c| c.trim().split('=').next().unwrap_or(""))
-            .collect();
-        tracing::debug!(cookie_count = cookie_names.len(), "sending cookies");
-
         let ua = crate::innertube::USER_AGENT;
 
         // Step 1: fetch the page HTML to get the innertube API key.
@@ -78,8 +72,6 @@ impl UserProfile {
         };
 
         let api_key = extract_innertube_api_key(&html);
-        tracing::debug!(api_key = ?api_key, "extracted innertube API key");
-
         // Step 2: call the innertube browse API for structured data.
         if let Some(key) = &api_key
             && let Some(profile) = fetch_profile_from_api(&cookie_header, key)
@@ -296,7 +288,7 @@ fn extract_profile_from_account_menu_json(json: &serde_json::Value) -> Option<Us
         .map(|s| s.to_string())
         .filter(|s| s.contains('@'));
 
-    tracing::info!(name = %name, avatar = ?avatar_url, email = ?email, "fetched user profile from account_menu");
+    tracing::debug!(name = %name, "fetched user profile");
 
     Some(UserProfile {
         name,

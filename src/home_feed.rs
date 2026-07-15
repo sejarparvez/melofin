@@ -76,7 +76,7 @@ const SECTIONS: &[(&str, &str)] = &[
 pub fn fetch_home_feed(cookies_path: &Path, cache_path: &Path, history_path: &Path) -> HomeFeed {
     // Try cache first.
     if let Some(cached) = load_cache(cache_path) {
-        tracing::info!(
+        tracing::debug!(
             sections = cached.sections.len(),
             "returning cached home feed"
         );
@@ -103,7 +103,7 @@ fn fetch_fresh_feed(cookies_path: &Path) -> HomeFeed {
     if cookies_path.exists() {
         match crate::innertube::browse_home(cookies_path) {
             Ok(feed) if !feed.sections.is_empty() => {
-                tracing::info!(
+                tracing::debug!(
                     sections = feed.sections.len(),
                     "using personalized InnerTube feed"
                 );
@@ -119,7 +119,7 @@ fn fetch_fresh_feed(cookies_path: &Path) -> HomeFeed {
     }
 
     // Fallback: unpersonalized yt-dlp search rows.
-    tracing::info!("using yt-dlp fallback feed");
+    tracing::debug!("using yt-dlp fallback feed");
     fetch_ytdlp_feed()
 }
 

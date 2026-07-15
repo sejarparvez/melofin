@@ -414,7 +414,11 @@ fn build_row(
 
 /// A single card with hover play icon. Clicking the card navigates to
 /// detail. Hovering shows a play button that plays immediately.
-fn track_card(track: Track, on_select: Rc<dyn Fn(Track)>, on_play: Rc<dyn Fn(Track)>) -> gtk::Widget {
+fn track_card(
+    track: Track,
+    on_select: Rc<dyn Fn(Track)>,
+    on_play: Rc<dyn Fn(Track)>,
+) -> gtk::Widget {
     let card = gtk::Box::new(gtk::Orientation::Vertical, 6);
     card.set_width_request(150);
 

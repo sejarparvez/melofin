@@ -54,14 +54,12 @@ pub fn fetch_liked_songs(cookies_path: &Path) -> Result<Vec<Track>> {
 
         current_token = extract_continuation(&response);
 
-        tracing::debug!(page, count, total = tracks.len(), "liked songs page");
-
         if count == 0 {
             break;
         }
     }
 
-    tracing::info!(total = tracks.len(), "fetched liked songs");
+    tracing::debug!(total = tracks.len(), "fetched liked songs");
     Ok(tracks)
 }
 

@@ -131,22 +131,14 @@ pub fn browse_home(cookies_path: &Path) -> Result<HomeFeed> {
     for (handle, &(_, title)) in handles.into_iter().zip(EXTRA_BROWSE_IDS.iter()) {
         match handle.join() {
             Ok(extra) if !extra.is_empty() => {
-                tracing::debug!(title, count = extra.len(), "fetched extra section");
                 sections.extend(extra);
             }
-            Ok(_) => {
-                tracing::debug!(title, "extra section returned empty, skipping");
-            }
+            Ok(_) => {}
             Err(_) => {
                 tracing::warn!(title, "extra section thread panicked, skipping");
             }
         }
     }
-
-    tracing::info!(
-        section_count = sections.len(),
-        "fetched personalized home feed"
-    );
 
     Ok(HomeFeed { sections })
 }
@@ -172,7 +164,6 @@ fn browse_home_with_continuations(cookie_header: &str, api_key: &str) -> Vec<Hom
     while let Some(token) = current_token {
         page += 1;
         if page > max_pages {
-            tracing::debug!("reached max continuation pages ({max_pages}), stopping");
             break;
         }
 
@@ -192,13 +183,6 @@ fn browse_home_with_continuations(cookie_header: &str, api_key: &str) -> Vec<Hom
             .pointer("/continuationContents/sectionListContinuation/continuations/0/nextContinuationData/continuation")
             .and_then(|c| c.as_str())
             .map(|s| s.to_string());
-
-        tracing::debug!(
-            page,
-            count,
-            has_next = current_token.is_some(),
-            "continuation page"
-        );
 
         if count == 0 {
             break;
@@ -267,9 +251,8 @@ pub(crate) fn search_artist_browse_id(
     api_key: &str,
     artist_name: &str,
 ) -> Option<String> {
-    let url = format!(
-        "https://music.youtube.com/youtubei/v1/search?key={api_key}&prettyPrint=false"
-    );
+    let url =
+        format!("https://music.youtube.com/youtubei/v1/search?key={api_key}&prettyPrint=false");
 
     let body = serde_json::json!({
         "context": {

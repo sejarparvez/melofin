@@ -154,7 +154,12 @@ fn build_left_cluster() -> LeftCluster {
     root.append(&forward_button);
     root.append(&home_button);
 
-    LeftCluster { root, home_button, back_button, forward_button }
+    LeftCluster {
+        root,
+        home_button,
+        back_button,
+        forward_button,
+    }
 }
 
 struct CenterCluster {
