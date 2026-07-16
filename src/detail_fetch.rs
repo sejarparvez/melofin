@@ -6,7 +6,7 @@ use crate::search::Track;
 use crate::user::read_and_validate_cookies;
 
 /// Metadata for a playlist, album, or artist page.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct DetailMetadata {
     pub title: String,
     pub artist: String,
@@ -14,6 +14,9 @@ pub struct DetailMetadata {
     pub description: String,
     pub year: String,
     pub track_count: usize,
+    pub monthly_listeners: Option<String>,
+    pub is_verified: bool,
+    pub banner_url: Option<String>,
 }
 
 /// A fully-fetched detail page: metadata + track listing.
@@ -176,6 +179,9 @@ fn parse_metadata(json: &serde_json::Value) -> DetailMetadata {
         description: String::new(),
         year: String::new(),
         track_count: 0,
+        monthly_listeners: None,
+        is_verified: false,
+        banner_url: None,
     };
     meta.thumbnail_url = normalize_thumbnail_url(&meta.thumbnail_url);
     meta
@@ -261,6 +267,9 @@ fn parse_responsive_header(header: &serde_json::Value) -> DetailMetadata {
         description,
         year,
         track_count: 0,
+        monthly_listeners: None,
+        is_verified: false,
+        banner_url: None,
     }
 }
 
@@ -283,6 +292,9 @@ fn parse_immersive_header(header: &serde_json::Value) -> DetailMetadata {
         description,
         year: String::new(),
         track_count: 0,
+        monthly_listeners: None,
+        is_verified: false,
+        banner_url: None,
     }
 }
 

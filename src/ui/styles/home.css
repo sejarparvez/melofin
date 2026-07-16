@@ -1,0 +1,135 @@
+/* Greeting */
+.greeting-text {
+    font-size: 48px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #e5e2e1;
+}
+
+.greeting-subtitle {
+    font-size: 16px;
+    color: #cac3d8;
+    margin-top: 4px;
+}
+
+/* Section headers */
+.section-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: #e5e2e1;
+}
+
+/* Navigation arrows */
+.nav-arrow {
+    min-width: 32px;
+    min-height: 32px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    color: #e5e2e1;
+    padding: 0;
+}
+
+.nav-arrow:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.nav-arrow:disabled {
+    opacity: 0.3;
+    border-color: rgba(255, 255, 255, 0.05);
+    background: transparent;
+}
+
+/* Album cards */
+.album-card {
+    padding: 0;
+    border-radius: 12px;
+    transition: transform 200ms ease, background-color 200ms ease;
+}
+
+.album-card:hover {
+    transform: translateY(-4px);
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+.album-art {
+    background-color: #2a2a2a;
+    border-radius: 12px;
+}
+
+.album-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #e5e2e1;
+    margin-top: 12px;
+}
+
+.album-artist {
+    font-size: 14px;
+    color: #cac3d8;
+    margin-top: 4px;
+}
+
+/* Category cards (For You section) */
+.category-card {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 16px;
+    transition: background-color 200ms ease;
+}
+
+.category-card:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+.category-art {
+    min-width: 80px;
+    min-height: 80px;
+    border-radius: 8px;
+    background-color: #2a2a2a;
+}
+
+.category-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #7c4dff;
+}
+
+.category-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #e5e2e1;
+}
+
+.category-description {
+    font-size: 14px;
+    color: #cac3d8;
+}
+
+/* Home card (legacy, kept for compatibility) */
+.home-art {
+    background-color: #2a2a2a;
+    border-radius: 12px;
+}
+
+.home-card {
+    padding: 8px;
+    border-radius: 12px;
+    transition: transform 200ms ease, background-color 200ms ease;
+}
+
+.home-card:hover {
+    background-color: rgba(124, 77, 255, 0.08);
+    transform: translateY(-2px);
+}
+
+.home-card:hover .home-art {
+    background-color: rgba(124, 77, 255, 0.15);
+}
+
+.hero-card {
+    background: #7c4dff;
+    border-radius: 16px;
+}

@@ -1,0 +1,17 @@
+.skeleton-block {
+    background-color: #2a2a2a;
+    border-radius: 4px;
+    animation: skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+    0% {
+        opacity: 0.4;
+    }
+    50% {
+        opacity: 0.85;
+    }
+    100% {
+        opacity: 0.4;
+    }
+}

@@ -76,10 +76,6 @@ const SECTIONS: &[(&str, &str)] = &[
 pub fn fetch_home_feed(cookies_path: &Path, cache_path: &Path, history_path: &Path) -> HomeFeed {
     // Try cache first.
     if let Some(cached) = load_cache(cache_path) {
-        tracing::debug!(
-            sections = cached.sections.len(),
-            "returning cached home feed"
-        );
         return cached;
     }
 

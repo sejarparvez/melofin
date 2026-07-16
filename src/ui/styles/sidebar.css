@@ -1,0 +1,27 @@
+.sidebar {
+    background-color: #131313;
+    border-radius: 8px;
+}
+
+.library-row {
+    padding: 8px 12px;
+    border-radius: 8px;
+    transition: background-color 200ms ease;
+}
+
+.library-row:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+.library-row.active {
+    background-color: rgba(124, 77, 255, 0.15);
+    border-left: 4px solid #7c4dff;
+}
+
+.library-chip {
+    min-height: 20px;
+    min-width: 0;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+}

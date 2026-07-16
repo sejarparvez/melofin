@@ -26,13 +26,13 @@ Phased implementation guide for improving the visual design of Melofin, aligned 
 
 ## Design Goals
 
-| Goal | Approach |
-|------|----------|
-| Respect system accent color | Use Adwaita named colors (`@accent_bg_color`, `@accent_fg_color`) |
-| Solid surfaces (no glassmorphism) | Use Adwaita surface color tokens for depth hierarchy |
-| Consistent with GNOME ecosystem | Leverage existing libadwaita CSS classes, minimize overrides |
-| Page-by-page implementation | Start with global tokens, then tackle one page at a time |
-| Match Stitch design intent | Adopt layout proportions, spacing, and component patterns from Stitch |
+| Goal                              | Approach                                                              |
+| --------------------------------- | --------------------------------------------------------------------- |
+| Respect system accent color       | Use Adwaita named colors (`@accent_bg_color`, `@accent_fg_color`)     |
+| Solid surfaces (no glassmorphism) | Use Adwaita surface color tokens for depth hierarchy                  |
+| Consistent with GNOME ecosystem   | Leverage existing libadwaita CSS classes, minimize overrides          |
+| Page-by-page implementation       | Start with global tokens, then tackle one page at a time              |
+| Match Stitch design intent        | Adopt layout proportions, spacing, and component patterns from Stitch |
 
 ---
 
@@ -91,21 +91,21 @@ gtk::style_context_add_provider_for_display(
 
 GTK4/libadwaita exposes the user's theme colors as named CSS colors. We reference these instead of hardcoding hex values:
 
-| Token | Purpose | Adwaita Value (default dark) |
-|-------|---------|------------------------------|
-| `@accent_bg_color` | Primary action backgrounds (buttons, active states) | User's chosen accent |
-| `@accent_fg_color` | Text on accent backgrounds | Usually white |
-| `@accent_color` | Accent without alpha | User's chosen accent |
-| `@window_bg_color` | Main window background | `#242424` (Adwaita default dark) |
-| `@headerbar_bg_color` | Headerbar / top bar | `#242424` or slightly different |
-| `@view_bg_color` | Content area background | `#1e1e1e` |
-| `@sidebar_bg_color` | Sidebar background | `#242424` |
-| `@card_bg_color` | Card surfaces | `rgba(255,255,255,0.04)` |
-| `@borders` | Border color | `rgba(255,255,255,0.08)` |
-| `@shade_color` | Shadows/overlays | `rgba(0,0,0,0.36)` |
-| `@header_fg_color` | Text on headerbar | `#ffffff` |
-| `@view_fg_color` | Text in content areas | `#ffffff` |
-| `@status_error_color` | Error/destructive | `#ff7b63` |
+| Token                 | Purpose                                             | Adwaita Value (default dark)     |
+| --------------------- | --------------------------------------------------- | -------------------------------- |
+| `@accent_bg_color`    | Primary action backgrounds (buttons, active states) | User's chosen accent             |
+| `@accent_fg_color`    | Text on accent backgrounds                          | Usually white                    |
+| `@accent_color`       | Accent without alpha                                | User's chosen accent             |
+| `@window_bg_color`    | Main window background                              | `#242424` (Adwaita default dark) |
+| `@headerbar_bg_color` | Headerbar / top bar                                 | `#242424` or slightly different  |
+| `@view_bg_color`      | Content area background                             | `#1e1e1e`                        |
+| `@sidebar_bg_color`   | Sidebar background                                  | `#242424`                        |
+| `@card_bg_color`      | Card surfaces                                       | `rgba(255,255,255,0.04)`         |
+| `@borders`            | Border color                                        | `rgba(255,255,255,0.08)`         |
+| `@shade_color`        | Shadows/overlays                                    | `rgba(0,0,0,0.36)`               |
+| `@header_fg_color`    | Text on headerbar                                   | `#ffffff`                        |
+| `@view_fg_color`      | Text in content areas                               | `#ffffff`                        |
+| `@status_error_color` | Error/destructive                                   | `#ff7b63`                        |
 
 ### Depth Hierarchy (Solid, No Transparency)
 
@@ -120,6 +120,7 @@ Layer 4 (Highest):     @window_bg_color + border  — popovers, dialogs
 ### Accent Color Usage
 
 The user's GNOME accent color will automatically color:
+
 - Primary buttons (`suggested-action` class)
 - Active/selected states
 - Toggle switches and radio buttons
@@ -143,9 +144,11 @@ Adwaita provides its own font stack. We keep the system fonts and only customize
 ### Stitch Reference
 
 The Stitch design uses Inter + Geist. Since we're targeting native GNOME, we stick with Adwaita's font system. If Inter is desired later, it can be set via:
+
 ```css
 @import url("resource:///org/gnome/Adwaita/Adwaita.css");
 ```
+
 Or by overriding `font-family` on the window.
 
 ---
@@ -154,24 +157,24 @@ Or by overriding `font-family` on the window.
 
 ### From Stitch Design System
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| Spacing unit | 8px | Base grid |
-| Container padding | 32px | Main content area margins |
-| Gutter | 24px | Gap between cards |
-| Sidebar width | 280px | Left library sidebar |
-| Player height | 96px | Bottom player bar |
+| Token             | Value | Usage                     |
+| ----------------- | ----- | ------------------------- |
+| Spacing unit      | 8px   | Base grid                 |
+| Container padding | 32px  | Main content area margins |
+| Gutter            | 24px  | Gap between cards         |
+| Sidebar width     | 280px | Left library sidebar      |
+| Player height     | 96px  | Bottom player bar         |
 
 ### Border Radius
 
-| Element | Radius | Notes |
-|---------|--------|-------|
-| Search pill | 999px | Already correct |
-| Standard buttons | 999px (pill) | Adwaita default for pill style |
-| Cards | 12px | Slightly larger than current 8px |
-| Art thumbnails | 12px | Match cards |
-| Library chips | 999px | Already correct |
-| Hero card | 16px | Larger, more prominent |
+| Element          | Radius       | Notes                            |
+| ---------------- | ------------ | -------------------------------- |
+| Search pill      | 999px        | Already correct                  |
+| Standard buttons | 999px (pill) | Adwaita default for pill style   |
+| Cards            | 12px         | Slightly larger than current 8px |
+| Art thumbnails   | 12px         | Match cards                      |
+| Library chips    | 999px        | Already correct                  |
+| Hero card        | 16px         | Larger, more prominent           |
 
 ---
 
@@ -179,13 +182,13 @@ Or by overriding `font-family` on the window.
 
 The Stitch project "Sleek Linux Music Player" contains these designs:
 
-| Screen | Stitch ID | Status |
-|--------|-----------|--------|
+| Screen            | Stitch ID  | Status           |
+| ----------------- | ---------- | ---------------- |
 | Library Dashboard | `ea3ed206` | **First target** |
-| Now Playing View | `0dbf4c4c` | Pending |
-| Explore & Search | `9ed04f81` | Pending |
-| Artist Profile | `d8c1face` | Pending |
-| Settings | `6a0ea73b` | Pending |
+| Now Playing View  | `0dbf4c4c` | Pending          |
+| Explore & Search  | `9ed04f81` | Pending          |
+| Artist Profile    | `d8c1face` | Pending          |
+| Settings          | `6a0ea73b` | Pending          |
 
 ---
 
@@ -196,6 +199,7 @@ The Stitch project "Sleek Linux Music Player" contains these designs:
 **Goal:** Establish the color and spacing foundation that all pages will use.
 
 **Files to create/modify:**
+
 - Create `src/ui/styles/tokens.css` — all `@define-color` tokens, global resets
 - Create `src/ui/styles/top_bar.css` — top bar and search styles
 - Create `src/ui/styles/sidebar.css` — sidebar and library chip styles
@@ -206,6 +210,7 @@ The Stitch project "Sleek Linux Music Player" contains these designs:
 - Delete `src/ui/style.css` — replaced by the split files
 
 **Changes:**
+
 1. Create `tokens.css` with `@define-color` rules for all Adwaita named colors
 2. Split existing CSS rules into their respective component files
 3. Replace all hardcoded hex colors with Adwaita named color references
@@ -217,17 +222,18 @@ The Stitch project "Sleek Linux Music Player" contains these designs:
 
 **Color mapping:**
 
-| Current Hardcoded | Replace With |
-|-------------------|-------------|
-| `#000000` (window) | `@window_bg_color` |
-| `#000000` (top bar) | `@headerbar_bg_color` |
-| `#0a0a0a` (sidebar) | `@sidebar_bg_color` |
-| `#2a2a2a` (search bg, art bg, skeleton) | `alpha(@window_fg_color, 0.1)` or `@card_bg_color` |
-| `#3a3a3a` (search focus, art hover) | `alpha(@window_fg_color, 0.15)` |
-| `alpha(#ffffff, 0.06)` (card hover) | `alpha(@accent_bg_color, 0.08)` |
-| `#4a2f6b, #1e1a3c` (hero gradient) | `@accent_bg_color` (solid, or subtle gradient using accent) |
+| Current Hardcoded                       | Replace With                                                |
+| --------------------------------------- | ----------------------------------------------------------- |
+| `#000000` (window)                      | `@window_bg_color`                                          |
+| `#000000` (top bar)                     | `@headerbar_bg_color`                                       |
+| `#0a0a0a` (sidebar)                     | `@sidebar_bg_color`                                         |
+| `#2a2a2a` (search bg, art bg, skeleton) | `alpha(@window_fg_color, 0.1)` or `@card_bg_color`          |
+| `#3a3a3a` (search focus, art hover)     | `alpha(@window_fg_color, 0.15)`                             |
+| `alpha(#ffffff, 0.06)` (card hover)     | `alpha(@accent_bg_color, 0.08)`                             |
+| `#4a2f6b, #1e1a3c` (hero gradient)      | `@accent_bg_color` (solid, or subtle gradient using accent) |
 
 **Verification:**
+
 ```bash
 cargo build
 # Verify all style files compile correctly
@@ -245,6 +251,7 @@ cargo build
 **Screens in Stitch:** `ea3ed206d23244e2adfa386d9bb31777` (Library Dashboard)
 
 **Current files:**
+
 - `src/ui/home_view.rs` — Main content area with cards
 - `src/ui/library_sidebar.rs` — Left sidebar with library list
 - `src/ui/now_playing_panel.rs` — Right panel (currently "Now Playing")
@@ -254,6 +261,7 @@ cargo build
 **Changes per component:**
 
 #### Home View (`home_view.rs` + CSS)
+
 - Update hero card gradient to use `@accent_bg_color` (solid or subtle)
 - Ensure home cards use 12px border radius
 - Add hover lift effect: `transition: transform 200ms ease` + `transform: translateY(-2px)`
@@ -261,22 +269,26 @@ cargo build
 - Ensure consistent 8px spacing grid
 
 #### Library Sidebar (`library_sidebar.rs` + CSS)
+
 - Verify background uses `@sidebar_bg_color`
 - Active library items: `background-color: alpha(@accent_bg_color, 0.15)` with 3px left bar in `@accent_bg_color`
 - Hover state: `alpha(@window_fg_color, 0.06)`
 - Ensure sidebar width is 280px
 
 #### Player Bar (`player_bar.rs` + CSS)
+
 - Ensure background uses `@headerbar_bg_color` or `@window_bg_color`
 - Add progress bar styling: 4px height, `@accent_bg_color` fill, 8px on hover
 - Ensure player height is 96px
 
 #### Top Bar (`top_bar.rs` + CSS)
+
 - Search pill background: `alpha(@window_fg_color, 0.08)`
 - Search focus: `alpha(@accent_bg_color, 0.12)` with subtle accent border
 - Ensure pill shape (already 999px)
 
 **Verification:**
+
 ```bash
 cargo build
 # Manual: test home page with different accent colors
@@ -294,10 +306,12 @@ cargo build
 **Stitch screen:** `0dbf4c4ce13f4bdfa3357298922c9a09` (Now Playing View)
 
 **Current files:**
+
 - `src/ui/now_playing_panel.rs` — Right panel with album art + track info
 - `src/ui/queue_panel.rs` — Queue list within the panel
 
 **Changes:**
+
 - Album art: larger display (224px from current `PANEL_WIDTH - 2*PANEL_MARGIN`)
 - Track info: title in `title-2` class, artist in `dim-label`
 - Progress bar: prominent, accent-colored, with timestamp labels
@@ -305,6 +319,7 @@ cargo build
 - Heart/like button: accent-colored when active
 
 **Verification:**
+
 ```bash
 cargo build
 # Manual: play a track, verify now playing panel layout
@@ -320,15 +335,18 @@ cargo build
 **Stitch screen:** `9ed04f816072404ab81de7e8ded6dc30` (Explore & Search)
 
 **Current files:**
+
 - `src/ui/search_view.rs` — Search results with skeleton loading
 
 **Changes:**
+
 - Search results: `boxed-list` with consistent row styling
 - Skeleton loading blocks: use `@card_bg_color` instead of hardcoded `#2a2a2a`
 - Search popover: card styling with proper border radius
 - Empty state: centered message with `dim-label`
 
 **Verification:**
+
 ```bash
 cargo build
 # Manual: search for artists/albums/songs, verify result styling
@@ -343,18 +361,22 @@ cargo build
 **Goal:** Implement the artist profile and detail view screens.
 
 **Stitch screens:**
+
 - `d8c1facedfae4f389e9bd51d6cc1e611` (Artist Profile)
 
 **Current files:**
+
 - `src/ui/detail_view.rs` — Artist/album detail with track list
 
 **Changes:**
+
 - Hero section: artist image with gradient overlay using `@accent_bg_color`
 - Track list: `boxed-list` with consistent row heights
 - Play all / shuffle buttons: `suggested-action` styling
 - Liked songs count: `dim-label` with caption styling
 
 **Verification:**
+
 ```bash
 cargo build
 # Manual: navigate to artist page, verify hero layout
@@ -371,9 +393,11 @@ cargo build
 **Stitch screen:** `6a0ea73bc7074834adabdac9411e5dec` (Settings)
 
 **Current files:**
+
 - `src/ui/login_dialog.rs` — Login dialog (closest to settings)
 
 **Changes:**
+
 - Settings page with `adw::PreferencesGroup` styling
 - Account section with profile info
 - Logout button: `destructive-action` class
@@ -381,6 +405,7 @@ cargo build
 - Final polish: transitions, focus states, keyboard navigation hints
 
 **Verification:**
+
 ```bash
 cargo build
 # Manual: open settings, verify all sections
@@ -392,14 +417,14 @@ cargo build
 
 ## Summary
 
-| Phase | Scope | Estimated Time | Prerequisites |
-|-------|-------|---------------|---------------|
-| 0 | Global design tokens | ~1 hour | None |
-| 1 | Library Dashboard | ~3-4 hours | Phase 0 |
-| 2 | Now Playing View | ~2-3 hours | Phase 0 |
-| 3 | Explore & Search | ~2 hours | Phase 0 |
-| 4 | Artist Profile | ~2 hours | Phase 0 |
-| 5 | Settings & Polish | ~2 hours | Phases 0-4 |
+| Phase | Scope                | Estimated Time | Prerequisites |
+| ----- | -------------------- | -------------- | ------------- |
+| 0     | Global design tokens | ~1 hour        | None          |
+| 1     | Library Dashboard    | ~3-4 hours     | Phase 0       |
+| 2     | Now Playing View     | ~2-3 hours     | Phase 0       |
+| 3     | Explore & Search     | ~2 hours       | Phase 0       |
+| 4     | Artist Profile       | ~2 hours       | Phase 0       |
+| 5     | Settings & Polish    | ~2 hours       | Phases 0-4    |
 
 **Total estimated time:** ~12-14 hours
 

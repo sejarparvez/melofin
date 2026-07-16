@@ -7,9 +7,7 @@ use crate::ui::home_view::HomeView;
 use crate::ui::library_sidebar::LibrarySidebar;
 use crate::ui::liked_songs_view::LikedSongsView;
 use crate::ui::login_dialog;
-use crate::ui::now_playing_panel::NowPlayingPanel;
 use crate::ui::player_bar::PlayerBar;
-use crate::ui::queue_panel::QueuePanel;
 use crate::ui::search_view::SearchView;
 use crate::ui::top_bar::build_top_bar;
 use crate::user::UserProfile;
@@ -29,8 +27,19 @@ pub fn run() -> glib::ExitCode {
 }
 
 fn load_css() {
+    let css = [
+        include_str!("styles/tokens.css"),
+        include_str!("styles/top_bar.css"),
+        include_str!("styles/sidebar.css"),
+        include_str!("styles/home.css"),
+        include_str!("styles/player.css"),
+        include_str!("styles/skeleton.css"),
+        include_str!("styles/detail.css"),
+    ]
+    .join("\n");
+
     let provider = gtk::CssProvider::new();
-    provider.load_from_string(include_str!("style.css"));
+    provider.load_from_string(&css);
     gtk::style_context_add_provider_for_display(
         &gdk::Display::default().expect("no default display"),
         &provider,
@@ -268,6 +277,9 @@ fn build_ui(app: &adw::Application) {
                     description: String::new(),
                     year: String::new(),
                     track_count: 1,
+                    monthly_listeners: None,
+                    is_verified: false,
+                    banner_url: None,
                 };
                 let detail = DetailView::new(
                     &metadata,
@@ -349,10 +361,15 @@ fn build_ui(app: &adw::Application) {
         }
     });
 
+    let user_name = UserProfile::load(&data_dir)
+        .map(|p| p.name)
+        .unwrap_or_else(|| "there".to_string());
+
     let home_view = HomeView::new(
         auth.cookies_path().to_path_buf(),
         home_cache_path,
         history_path,
+        &user_name,
         on_select.clone(),
         play_track.clone(),
     );
@@ -370,51 +387,43 @@ fn build_ui(app: &adw::Application) {
     let _search_view = search_view;
 
     let player_bar = PlayerBar::new(handle.commands.clone());
-    let now_playing_panel = NowPlayingPanel::new(auth.cookies_path().to_path_buf());
-
-    // -- Queue panel -----------------------------------------------------------
-
-    let queue_panel = QueuePanel::new(handle.commands.clone());
-    let queue_panel_widget = queue_panel.widget.clone();
-    // Start hidden.
-    queue_panel_widget.set_visible(false);
-
-    {
-        let panel = queue_panel_widget.clone();
-        player_bar.queue_button.connect_clicked(move |_| {
-            let visible = panel.is_visible();
-            panel.set_visible(!visible);
-        });
-    }
 
     // -- Library sidebar -------------------------------------------------------
 
     let content_stack_for_sidebar = content_stack.clone();
     let cookies_for_liked = auth.cookies_path().to_path_buf();
-    let library_sidebar = LibrarySidebar::new({
-        let stack = content_stack_for_sidebar.clone();
-        let cookies = cookies_for_liked.clone();
-        let on_select = on_select.clone();
-        let play_from_list = play_from_list.clone();
-        let navigate_to_liked = navigate_to.clone();
-        let go_back_for_liked = go_back.clone();
-        move || {
-            let stack = stack.clone();
-            let liked_view = LikedSongsView::new(
-                cookies.clone(),
-                on_select.clone(),
-                play_from_list.clone(),
-                go_back_for_liked.clone(),
-            );
-            liked_view.widget.set_hexpand(true);
-            liked_view.widget.set_vexpand(true);
-            if let Some(old) = stack.child_by_name("liked") {
-                stack.remove(&old);
+    let navigate_to_home = navigate_to.clone();
+    let library_sidebar = LibrarySidebar::new(
+        {
+            let stack = content_stack_for_sidebar.clone();
+            let cookies = cookies_for_liked.clone();
+            let on_select = on_select.clone();
+            let play_from_list = play_from_list.clone();
+            let navigate_to_liked = navigate_to.clone();
+            let go_back_for_liked = go_back.clone();
+            move || {
+                let stack = stack.clone();
+                let liked_view = LikedSongsView::new(
+                    cookies.clone(),
+                    on_select.clone(),
+                    play_from_list.clone(),
+                    go_back_for_liked.clone(),
+                );
+                liked_view.widget.set_hexpand(true);
+                liked_view.widget.set_vexpand(true);
+                if let Some(old) = stack.child_by_name("liked") {
+                    stack.remove(&old);
+                }
+                stack.add_named(&liked_view.widget, Some("liked"));
+                navigate_to_liked("liked");
             }
-            stack.add_named(&liked_view.widget, Some("liked"));
-            navigate_to_liked("liked");
-        }
-    });
+        },
+        move |name| {
+            if name == "Library" {
+                navigate_to_home("home");
+            }
+        },
+    );
 
     // Back/forward navigation buttons.
     {
@@ -435,10 +444,6 @@ fn build_ui(app: &adw::Application) {
     middle_row.append(&library_sidebar.widget);
     middle_row.append(&gtk::Separator::new(gtk::Orientation::Vertical));
     middle_row.append(&content_stack);
-    middle_row.append(&gtk::Separator::new(gtk::Orientation::Vertical));
-    middle_row.append(&now_playing_panel.widget);
-    middle_row.append(&gtk::Separator::new(gtk::Orientation::Vertical));
-    middle_row.append(&queue_panel_widget);
     middle_row.set_hexpand(true);
     middle_row.set_vexpand(true);
 
@@ -507,7 +512,7 @@ fn build_ui(app: &adw::Application) {
         });
     }
 
-    // -- Player & queue event stream -------------------------------------------
+    // -- Player event stream ----------------------------------------------------
 
     let event_rx = handle.events;
     glib::spawn_future_local(async move {
@@ -515,10 +520,9 @@ fn build_ui(app: &adw::Application) {
             match event {
                 PlayerEvent::State(state) => {
                     player_bar.update(&state);
-                    now_playing_panel.update(&state);
                 }
-                PlayerEvent::Queue(snapshot) => {
-                    queue_panel.update(&snapshot);
+                PlayerEvent::Queue(_snapshot) => {
+                    // Queue panel removed per Stitch design
                 }
             }
         }

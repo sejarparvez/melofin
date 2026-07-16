@@ -10,151 +10,38 @@ pub struct DetailView {
 
 impl DetailView {
     /// Builds a fully-loaded detail view from fetched metadata and tracks.
-    /// `on_play_from_list` receives the full track list + clicked index, so
-    /// clicking a track enqueues the entire list starting from that track.
     pub fn new(
         metadata: &DetailMetadata,
         tracks: &[Track],
         on_play_from_list: Rc<dyn Fn(Vec<Track>, usize)>,
-        on_back: Rc<dyn Fn()>,
+        _on_back: Rc<dyn Fn()>,
     ) -> Self {
-        let content = gtk::Box::new(gtk::Orientation::Vertical, 16);
-        content.set_margin_top(20);
-        content.set_margin_bottom(24);
-        content.set_margin_start(20);
-        content.set_margin_end(20);
+        let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
         content.set_vexpand(true);
 
-        // --- Back button ---
-        let back_button = gtk::Button::from_icon_name("go-previous-symbolic");
-        back_button.add_css_class("flat");
-        back_button.set_halign(gtk::Align::Start);
-        {
-            let on_back = on_back.clone();
-            back_button.connect_clicked(move |_| on_back());
-        }
-        content.append(&back_button);
+        // --- Hero Section ---
+        let hero = build_hero_section(metadata, tracks, on_play_from_list.clone());
+        content.append(&hero);
 
-        // --- Header: thumbnail + metadata ---
-        let header = gtk::Box::new(gtk::Orientation::Horizontal, 16);
-        header.set_valign(gtk::Align::Start);
+        // --- Content Section (Two Columns) ---
+        let content_row = gtk::Box::new(gtk::Orientation::Horizontal, 24);
+        content_row.set_margin_start(32);
+        content_row.set_margin_end(32);
+        content_row.set_margin_top(24);
+        content_row.set_margin_bottom(32);
 
-        // Thumbnail
-        let thumb_frame = gtk::Frame::new(None);
-        thumb_frame.add_css_class("card");
-        thumb_frame.add_css_class("home-art");
-        thumb_frame.set_size_request(200, 200);
+        // Left column: Top Tracks
+        let left_col = build_top_tracks_section(tracks, on_play_from_list);
+        left_col.set_hexpand(true);
 
-        let thumb_icon = gtk::Image::from_icon_name("emblem-music-symbolic");
-        thumb_icon.set_pixel_size(48);
-        thumb_icon.set_halign(gtk::Align::Center);
-        thumb_icon.set_valign(gtk::Align::Center);
-        thumb_frame.set_child(Some(&thumb_icon));
+        // Right column: About
+        let right_col = build_about_section(metadata);
+        right_col.set_size_request(280, -1);
 
-        if !metadata.thumbnail_url.is_empty() {
-            let picture = gtk::Picture::new();
-            picture.set_content_fit(gtk::ContentFit::Cover);
-            picture.set_size_request(200, 200);
-            thumb_frame.set_child(Some(&picture));
-            let url = metadata.thumbnail_url.clone();
-            thumbnail_widget::spawn_fetch(url, 200, move |tex| {
-                picture.set_paintable(Some(&tex));
-            });
-        }
+        content_row.append(&left_col);
+        content_row.append(&right_col);
 
-        // Text column
-        let text_col = gtk::Box::new(gtk::Orientation::Vertical, 6);
-        text_col.set_hexpand(true);
-        text_col.set_valign(gtk::Align::Center);
-
-        let title_label = gtk::Label::new(Some(&metadata.title));
-        title_label.add_css_class("title-1");
-        title_label.set_halign(gtk::Align::Start);
-        title_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
-        title_label.set_wrap(true);
-
-        let artist_label = gtk::Label::new(Some(&metadata.artist));
-        artist_label.add_css_class("heading");
-        artist_label.add_css_class("dim-label");
-        artist_label.set_halign(gtk::Align::Start);
-        artist_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
-
-        let meta_text = match (metadata.year.is_empty(), metadata.track_count > 0) {
-            (false, true) => format!("{} · {} tracks", metadata.year, metadata.track_count),
-            (false, false) => metadata.year.clone(),
-            (true, true) => format!("{} tracks", metadata.track_count),
-            (true, false) => String::new(),
-        };
-        let meta_label = gtk::Label::new(Some(&meta_text));
-        meta_label.add_css_class("caption");
-        meta_label.add_css_class("dim-label");
-        meta_label.set_halign(gtk::Align::Start);
-
-        text_col.append(&title_label);
-        text_col.append(&artist_label);
-        if !meta_text.is_empty() {
-            text_col.append(&meta_label);
-        }
-
-        // Description
-        if !metadata.description.is_empty() {
-            let desc_label = gtk::Label::new(Some(&metadata.description));
-            desc_label.add_css_class("caption");
-            desc_label.add_css_class("dim-label");
-            desc_label.set_halign(gtk::Align::Start);
-            desc_label.set_xalign(0.0);
-            desc_label.set_wrap(true);
-            desc_label.set_max_width_chars(60);
-            desc_label.set_margin_top(8);
-            text_col.append(&desc_label);
-        }
-
-        // Play All button: enqueues the full list and starts at track 0.
-        if !tracks.is_empty() {
-            let play_all = gtk::Button::with_label("Play All");
-            play_all.add_css_class("pill");
-            play_all.add_css_class("suggested-action");
-            play_all.set_halign(gtk::Align::Start);
-            play_all.set_margin_top(8);
-            let all_tracks = tracks.to_vec();
-            let on_play_from_list = on_play_from_list.clone();
-            play_all.connect_clicked(move |_| {
-                on_play_from_list(all_tracks.clone(), 0);
-            });
-            text_col.append(&play_all);
-        }
-
-        header.append(&thumb_frame);
-        header.append(&text_col);
-        content.append(&header);
-
-        // --- Separator ---
-        content.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
-
-        // --- Track list ---
-        let list = gtk::ListBox::new();
-        list.set_selection_mode(gtk::SelectionMode::None);
-        list.add_css_class("boxed-list");
-        list.set_margin_start(12);
-        list.set_margin_end(12);
-
-        for (i, track) in tracks.iter().enumerate() {
-            list.append(&thumbnail_widget::build_detail_track_row(track, i));
-        }
-
-        // Wire row activation: enqueue the full list starting at the clicked track.
-        {
-            let all_tracks = tracks.to_vec();
-            let on_play_from_list = on_play_from_list.clone();
-            list.connect_row_activated(move |_list, row| {
-                let index = row.index() as usize;
-                if index < all_tracks.len() {
-                    on_play_from_list(all_tracks.clone(), index);
-                }
-            });
-        }
-
-        content.append(&list);
+        content.append(&content_row);
 
         let widget = gtk::ScrolledWindow::new();
         widget.set_vexpand(true);
@@ -214,4 +101,279 @@ impl DetailView {
         widget.set_child(Some(&box_));
         Self { widget }
     }
+}
+
+/// Build the hero section with artist info and action buttons.
+fn build_hero_section(
+    metadata: &DetailMetadata,
+    tracks: &[Track],
+    on_play_from_list: Rc<dyn Fn(Vec<Track>, usize)>,
+) -> gtk::Widget {
+    let hero = gtk::Box::new(gtk::Orientation::Vertical, 8);
+    hero.add_css_class("artist-hero");
+
+    // Content
+    let hero_content = gtk::Box::new(gtk::Orientation::Vertical, 8);
+    hero_content.add_css_class("artist-hero-content");
+
+    // Verified badge
+    if metadata.is_verified {
+        let badge = gtk::Label::new(Some("\u{2713} VERIFIED ARTIST"));
+        badge.add_css_class("verified-badge");
+        badge.set_halign(gtk::Align::Start);
+        hero_content.append(&badge);
+    }
+
+    // Artist name
+    let name_label = gtk::Label::new(Some(&metadata.title));
+    name_label.add_css_class("artist-name");
+    name_label.set_halign(gtk::Align::Start);
+    name_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    hero_content.append(&name_label);
+
+    // Monthly listeners
+    if let Some(listeners) = &metadata.monthly_listeners {
+        let listeners_label = gtk::Label::new(Some(&format!("{} MONTHLY LISTENERS", listeners)));
+        listeners_label.add_css_class("monthly-listeners");
+        listeners_label.set_halign(gtk::Align::Start);
+        hero_content.append(&listeners_label);
+    }
+
+    // Bio text
+    if !metadata.description.is_empty() {
+        let bio_label = gtk::Label::new(Some(&metadata.description));
+        bio_label.add_css_class("artist-bio");
+        bio_label.set_halign(gtk::Align::Start);
+        bio_label.set_xalign(0.0);
+        bio_label.set_wrap(true);
+        bio_label.set_max_width_chars(80);
+        hero_content.append(&bio_label);
+    }
+
+    // Action buttons
+    let buttons_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    buttons_row.set_halign(gtk::Align::Start);
+    buttons_row.set_margin_top(16);
+
+    // Play Artist button
+    if !tracks.is_empty() {
+        let play_btn = gtk::Button::with_label("\u{25b6} Play Artist");
+        play_btn.add_css_class("play-artist-btn");
+        let all_tracks = tracks.to_vec();
+        let on_play_from_list = on_play_from_list.clone();
+        play_btn.connect_clicked(move |_| {
+            on_play_from_list(all_tracks.clone(), 0);
+        });
+        buttons_row.append(&play_btn);
+    }
+
+    // Follow button
+    let follow_btn = gtk::Button::with_label("Follow");
+    follow_btn.add_css_class("follow-btn");
+    buttons_row.append(&follow_btn);
+
+    // More button
+    let more_btn = gtk::Button::from_icon_name("view-more-symbolic");
+    more_btn.add_css_class("more-btn");
+    buttons_row.append(&more_btn);
+
+    hero_content.append(&buttons_row);
+
+    hero.append(&hero_content);
+    hero.upcast()
+}
+
+/// Build the Top Tracks section with table-style layout.
+fn build_top_tracks_section(
+    tracks: &[Track],
+    on_play_from_list: Rc<dyn Fn(Vec<Track>, usize)>,
+) -> gtk::Box {
+    let left_col = gtk::Box::new(gtk::Orientation::Vertical, 16);
+
+    // Section header
+    let header = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+
+    let title = gtk::Label::new(Some("Top Tracks"));
+    title.add_css_class("section-title");
+    title.set_halign(gtk::Align::Start);
+    title.set_hexpand(true);
+
+    let show_all = gtk::Button::with_label("Show All");
+    show_all.add_css_class("show-all-link");
+    show_all.set_halign(gtk::Align::End);
+
+    header.append(&title);
+    header.append(&show_all);
+    left_col.append(&header);
+
+    // Track table
+    let table = gtk::Box::new(gtk::Orientation::Vertical, 0);
+
+    // Table header
+    let table_header = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    table_header.add_css_class("track-table-header");
+
+    let hash_label = gtk::Label::new(Some("#"));
+    hash_label.set_width_chars(4);
+    hash_label.set_halign(gtk::Align::Start);
+
+    let title_label = gtk::Label::new(Some("TITLE"));
+    title_label.set_hexpand(true);
+    title_label.set_halign(gtk::Align::Start);
+
+    let plays_label = gtk::Label::new(Some("PLAYS"));
+    plays_label.set_width_chars(12);
+    plays_label.set_halign(gtk::Align::End);
+
+    let duration_label = gtk::Label::new(Some("\u{23f1}"));
+    duration_label.set_width_chars(6);
+    duration_label.set_halign(gtk::Align::End);
+
+    table_header.append(&hash_label);
+    table_header.append(&title_label);
+    table_header.append(&plays_label);
+    table_header.append(&duration_label);
+    table.append(&table_header);
+
+    // Track rows
+    for (i, track) in tracks.iter().enumerate() {
+        let row = build_track_row(track, i + 1);
+        let all_tracks = tracks.to_vec();
+        let on_play_from_list = on_play_from_list.clone();
+        row.connect_clicked(move |_| {
+            let index = i;
+            if index < all_tracks.len() {
+                on_play_from_list(all_tracks.clone(), index);
+            }
+        });
+        table.append(&row);
+    }
+
+    left_col.append(&table);
+    left_col
+}
+
+/// Build a single track row for the table.
+fn build_track_row(track: &Track, number: usize) -> gtk::Button {
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    row.add_css_class("track-row");
+
+    // Track number
+    let num_label = gtk::Label::new(Some(&number.to_string()));
+    num_label.add_css_class("track-number");
+    num_label.set_width_chars(4);
+    num_label.set_halign(gtk::Align::Start);
+
+    // Album art
+    let art_frame = gtk::Frame::new(None);
+    art_frame.add_css_class("track-art");
+    art_frame.set_size_request(40, 40);
+
+    let art_icon = gtk::Image::from_icon_name("emblem-music-symbolic");
+    art_icon.set_pixel_size(16);
+    art_icon.set_halign(gtk::Align::Center);
+    art_icon.set_valign(gtk::Align::Center);
+    art_frame.set_child(Some(&art_icon));
+
+    if !track.thumbnail_url.is_empty() {
+        let picture = gtk::Picture::new();
+        picture.set_content_fit(gtk::ContentFit::Cover);
+        picture.set_size_request(40, 40);
+        art_frame.set_child(Some(&picture));
+        let url = track.thumbnail_url.clone();
+        thumbnail_widget::spawn_fetch(url, 40, move |tex| {
+            picture.set_paintable(Some(&tex));
+        });
+    }
+
+    // Text info
+    let text_box = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    text_box.set_valign(gtk::Align::Center);
+    text_box.set_hexpand(true);
+
+    let title_label = gtk::Label::new(Some(&track.title));
+    title_label.add_css_class("track-title");
+    title_label.set_halign(gtk::Align::Start);
+    title_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    title_label.set_max_width_chars(30);
+
+    let album_label = gtk::Label::new(Some(&track.artist));
+    album_label.add_css_class("track-album");
+    album_label.set_halign(gtk::Align::Start);
+    album_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    album_label.set_max_width_chars(30);
+
+    text_box.append(&title_label);
+    text_box.append(&album_label);
+
+    // Play count (placeholder)
+    let plays_label = gtk::Label::new(Some("--"));
+    plays_label.add_css_class("track-plays");
+    plays_label.set_width_chars(12);
+    plays_label.set_halign(gtk::Align::End);
+
+    // Duration
+    let duration_label = gtk::Label::new(Some(
+        track.duration.as_deref().unwrap_or("0:00"),
+    ));
+    duration_label.add_css_class("track-duration");
+    duration_label.set_width_chars(6);
+    duration_label.set_halign(gtk::Align::End);
+
+    row.append(&num_label);
+    row.append(&art_frame);
+    row.append(&text_box);
+    row.append(&plays_label);
+    row.append(&duration_label);
+
+    let button = gtk::Button::new();
+    button.add_css_class("flat");
+    button.set_child(Some(&row));
+    button
+}
+
+/// Build the About section.
+fn build_about_section(metadata: &DetailMetadata) -> gtk::Box {
+    let right_col = gtk::Box::new(gtk::Orientation::Vertical, 16);
+
+    // About card
+    let card = gtk::Box::new(gtk::Orientation::Vertical, 16);
+    card.add_css_class("about-card");
+
+    let title = gtk::Label::new(Some("About"));
+    title.add_css_class("about-title");
+    title.set_halign(gtk::Align::Start);
+    card.append(&title);
+
+    // Artist image (if available)
+    if !metadata.thumbnail_url.is_empty() {
+        let image_frame = gtk::Frame::new(None);
+        image_frame.add_css_class("about-image");
+        image_frame.set_size_request(248, 248);
+
+        let picture = gtk::Picture::new();
+        picture.set_content_fit(gtk::ContentFit::Cover);
+        picture.set_size_request(248, 248);
+        image_frame.set_child(Some(&picture));
+
+        let url = metadata.thumbnail_url.clone();
+        thumbnail_widget::spawn_fetch(url, 248, move |tex| {
+            picture.set_paintable(Some(&tex));
+        });
+
+        card.append(&image_frame);
+    }
+
+    // Bio text
+    if !metadata.description.is_empty() {
+        let bio_label = gtk::Label::new(Some(&metadata.description));
+        bio_label.add_css_class("about-text");
+        bio_label.set_halign(gtk::Align::Start);
+        bio_label.set_xalign(0.0);
+        bio_label.set_wrap(true);
+        card.append(&bio_label);
+    }
+
+    right_col.append(&card);
+    right_col
 }

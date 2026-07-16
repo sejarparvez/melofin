@@ -1,48 +1,32 @@
-//! Left "Your Library" sidebar. Shows the user's library items fetched from
-//! YouTube Music. "Liked Songs" is wired to switch the main content area;
-//! other items show a "coming soon" tooltip until their backends are ready.
+//! Left sidebar with app branding, navigation items, and settings.
+//! Matches the Stitch "Library Dashboard" design.
 
 use adw::prelude::*;
+use std::cell::Cell;
+use std::rc::Rc;
 
-const NO_BACKEND_YET: &str = "coming soon \u{2014} no library backend yet";
-
-struct LibraryItem {
+struct NavItem {
     name: &'static str,
-    subtitle: &'static str,
     icon: &'static str,
 }
 
-fn dummy_library() -> Vec<LibraryItem> {
+fn nav_items() -> Vec<NavItem> {
     vec![
-        LibraryItem {
+        NavItem {
+            name: "Library",
+            icon: "emblem-music-symbolic",
+        },
+        NavItem {
+            name: "Explore",
+            icon: "emblem-sychronizing-symbolic",
+        },
+        NavItem {
             name: "Liked Songs",
-            subtitle: "Playlist",
             icon: "starred-symbolic",
         },
-        LibraryItem {
-            name: "Discover Weekly",
-            subtitle: "Playlist",
-            icon: "media-playlist-shuffle-symbolic",
-        },
-        LibraryItem {
-            name: "Harry Styles",
-            subtitle: "Artist",
-            icon: "avatar-default-symbolic",
-        },
-        LibraryItem {
-            name: "Eminem",
-            subtitle: "Artist",
-            icon: "avatar-default-symbolic",
-        },
-        LibraryItem {
-            name: "Alan Walker",
-            subtitle: "Artist",
-            icon: "avatar-default-symbolic",
-        },
-        LibraryItem {
-            name: "Imagine Dragons",
-            subtitle: "Artist",
-            icon: "avatar-default-symbolic",
+        NavItem {
+            name: "Playlists",
+            icon: "playlist-symbolic",
         },
     ]
 }
@@ -52,114 +36,137 @@ pub struct LibrarySidebar {
 }
 impl Default for LibrarySidebar {
     fn default() -> Self {
-        Self::new(|| {})
+        Self::new(|| {}, |_| {})
     }
 }
 impl LibrarySidebar {
-    /// `on_liked_songs` is called when the user clicks "Liked Songs" in the
-    /// sidebar. Pass a closure that switches the main content area to the
-    /// liked songs view.
-    pub fn new(on_liked_songs: impl Fn() + 'static + Clone) -> Self {
-        let widget = gtk::Box::new(gtk::Orientation::Vertical, 10);
+    /// `on_liked_songs` is called when the user clicks "Liked Songs".
+    /// `on_navigate` is called when any nav item is clicked with the item name.
+    pub fn new(
+        on_liked_songs: impl Fn() + 'static + Clone,
+        on_navigate: impl Fn(&str) + 'static + Clone,
+    ) -> Self {
+        let widget = gtk::Box::new(gtk::Orientation::Vertical, 8);
         widget.add_css_class("sidebar");
-        widget.set_size_request(240, -1);
-        widget.set_margin_top(10);
-        widget.set_margin_bottom(10);
+        widget.set_size_request(280, -1);
+        widget.set_margin_top(8);
+        widget.set_margin_bottom(8);
         widget.set_margin_start(8);
         widget.set_margin_end(8);
 
-        let header = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-        let title = gtk::Label::new(Some("Your Library"));
-        title.add_css_class("heading");
-        title.set_hexpand(true);
+        // App branding header
+        let header = gtk::Box::new(gtk::Orientation::Vertical, 2);
+        header.set_margin_bottom(8);
+        let title = gtk::Label::new(Some("Music Player"));
+        title.add_css_class("title-2");
         title.set_halign(gtk::Align::Start);
-
-        let add_button = gtk::Button::from_icon_name("list-add-symbolic");
-        add_button.add_css_class("flat");
-        add_button.add_css_class("circular");
-        add_button.set_tooltip_text(Some(NO_BACKEND_YET));
-        add_button.set_sensitive(false);
-
+        let subtitle = gtk::Label::new(Some("Premium Audio"));
+        subtitle.add_css_class("dim-label");
+        subtitle.set_halign(gtk::Align::Start);
         header.append(&title);
-        header.append(&add_button);
+        header.append(&subtitle);
         widget.append(&header);
 
-        // Playlists / Albums / Artists filter chips \u{2014} cosmetic only until
-        // there's more than one kind of library data to filter between.
-        let chips = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-        for label in ["Playlists", "Albums", "Artists"] {
-            let chip = gtk::ToggleButton::with_label(label);
-            chip.add_css_class("pill");
-            chip.add_css_class("library-chip");
-            chip.set_sensitive(false);
-            chip.set_tooltip_text(Some(NO_BACKEND_YET));
-            chips.append(&chip);
-        }
-        let chips_scroller = gtk::ScrolledWindow::new();
-        chips_scroller.set_vscrollbar_policy(gtk::PolicyType::Never);
-        chips_scroller.set_hscrollbar_policy(gtk::PolicyType::External);
-        chips_scroller.set_child(Some(&chips));
-        widget.append(&chips_scroller);
+        // Navigation items
+        let active_index = Rc::new(Cell::new(0usize));
+        let nav_box = gtk::Box::new(gtk::Orientation::Vertical, 2);
+        let nav_items = nav_items();
 
-        let rows = gtk::Box::new(gtk::Orientation::Vertical, 2);
-        let items = dummy_library();
-        for (i, item) in items.iter().enumerate() {
-            let row_widget = library_row(item);
-            // "Liked Songs" (index 0) is clickable when logged in.
-            if i == 0 {
-                let btn = row_widget.downcast_ref::<gtk::Button>().unwrap();
-                btn.set_sensitive(true);
-                btn.set_tooltip_text(None);
-                let on_liked_songs = on_liked_songs.clone();
-                btn.connect_clicked(move |_| on_liked_songs());
-            }
-            rows.append(&row_widget);
+        for (i, item) in nav_items.iter().enumerate() {
+            let row_widget = nav_row(item, i == 0);
+            let btn = row_widget.downcast_ref::<gtk::Button>().unwrap();
+
+            // Wire click handler
+            let active_index = active_index.clone();
+            let on_liked_songs = on_liked_songs.clone();
+            let on_navigate = on_navigate.clone();
+            let item_name = item.name.to_string();
+            let nav_box_ref = nav_box.clone();
+            btn.connect_clicked(move |_| {
+                let new_index = i;
+
+                // Update active state visually
+                if let Some(child) = nav_box_ref.first_child() {
+                    let mut current = child.clone();
+                    let mut idx = 0;
+                    loop {
+                        if idx == new_index {
+                            current.add_css_class("active");
+                        } else {
+                            current.remove_css_class("active");
+                        }
+                        if let Some(next) = current.next_sibling() {
+                            current = next;
+                            idx += 1;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                active_index.set(new_index);
+
+                // Fire navigation callback
+                if item_name == "Liked Songs" {
+                    on_liked_songs();
+                } else {
+                    on_navigate(&item_name);
+                }
+            });
+
+            nav_box.append(&row_widget);
         }
 
-        let scroller = gtk::ScrolledWindow::new();
-        scroller.set_hscrollbar_policy(gtk::PolicyType::Never);
-        scroller.set_vexpand(true);
-        scroller.set_child(Some(&rows));
-        widget.append(&scroller);
+        widget.append(&nav_box);
+
+        // Spacer to push settings to bottom
+        let spacer = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        spacer.set_vexpand(true);
+        widget.append(&spacer);
+
+        // Settings button at bottom
+        let settings_row = nav_row(
+            &NavItem {
+                name: "Settings",
+                icon: "emblem-system-symbolic",
+            },
+            false,
+        );
+        let settings_btn = settings_row.downcast_ref::<gtk::Button>().unwrap();
+        settings_btn.set_tooltip_text(None);
+        // Settings click handler — opens About dialog via parent window
+        // For now, just a placeholder that does nothing visible
+        settings_btn.connect_clicked(|_| {
+            // The About dialog is wired in window.rs via the app action
+        });
+        widget.append(&settings_row);
+
         widget.set_hexpand(false);
         Self { widget }
     }
 }
 
-fn library_row(item: &LibraryItem) -> gtk::Widget {
+fn nav_row(item: &NavItem, active: bool) -> gtk::Widget {
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+    row.add_css_class("library-row");
+    if active {
+        row.add_css_class("active");
+    }
 
-    let art = gtk::Frame::new(None);
-    art.add_css_class("home-art");
-    art.set_size_request(40, 40);
     let icon = gtk::Image::from_icon_name(item.icon);
-    icon.set_pixel_size(18);
+    icon.set_pixel_size(24);
     icon.set_halign(gtk::Align::Center);
     icon.set_valign(gtk::Align::Center);
-    art.set_child(Some(&icon));
 
-    let text_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    text_box.set_valign(gtk::Align::Center);
-    let name = gtk::Label::new(Some(item.name));
-    name.set_halign(gtk::Align::Start);
-    name.set_ellipsize(gtk::pango::EllipsizeMode::End);
-    let subtitle = gtk::Label::new(Some(item.subtitle));
-    subtitle.add_css_class("dim-label");
-    subtitle.add_css_class("caption");
-    subtitle.set_halign(gtk::Align::Start);
-    text_box.append(&name);
-    text_box.append(&subtitle);
+    let label = gtk::Label::new(Some(item.name));
+    label.set_halign(gtk::Align::Start);
+    label.set_hexpand(true);
+    label.set_ellipsize(gtk::pango::EllipsizeMode::End);
 
-    row.append(&art);
-    row.append(&text_box);
+    row.append(&icon);
+    row.append(&label);
 
-    // A disabled `Button` wrapper (not a bare row) so it already looks and
-    // behaves like every other not-yet-wired control in the app, rather
-    // than looking clickable and silently doing nothing.
     let button = gtk::Button::new();
     button.add_css_class("flat");
     button.set_child(Some(&row));
-    button.set_sensitive(false);
-    button.set_tooltip_text(Some(NO_BACKEND_YET));
     button.upcast()
 }

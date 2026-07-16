@@ -32,17 +32,18 @@ impl HomeView {
         cookies_path: PathBuf,
         cache_path: PathBuf,
         history_path: PathBuf,
+        user_name: &str,
         on_select: Rc<dyn Fn(Track)>,
         on_play: Rc<dyn Fn(Track)>,
     ) -> Self {
-        let content = gtk::Box::new(gtk::Orientation::Vertical, 24);
-        content.set_margin_top(20);
-        content.set_margin_bottom(24);
-        content.set_margin_start(20);
-        content.set_margin_end(20);
+        let content = gtk::Box::new(gtk::Orientation::Vertical, 32);
+        content.set_margin_top(32);
+        content.set_margin_bottom(32);
+        content.set_margin_start(32);
+        content.set_margin_end(32);
 
-        content.append(&build_filter_pills());
-        content.append(&build_shortcuts_grid());
+        content.append(&build_greeting(user_name));
+        content.append(&build_for_you_section());
 
         // Hero card + rows get built into this once the feed loads; starts
         // out holding a loading spinner.
@@ -204,100 +205,209 @@ fn error_state(
     box_.upcast()
 }
 
-/// "All / Music" filter row — cosmetic for now (there's only one feed to
-/// filter), matching Spotify's home filter chips so the layout already has
-/// somewhere to grow into (podcasts, etc.) later.
-fn build_filter_pills() -> gtk::Box {
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+/// Time-based greeting section matching the Stitch "Library Dashboard" design.
+fn build_greeting(user_name: &str) -> gtk::Box {
+    let box_ = gtk::Box::new(gtk::Orientation::Vertical, 4);
 
-    let all = gtk::ToggleButton::with_label("All");
-    all.add_css_class("pill");
-    all.set_active(true);
+    let now = glib::DateTime::now_local()
+        .unwrap_or_else(|_| glib::DateTime::now_utc().expect("failed to get UTC time"));
+    let hour = now.hour();
+    let greeting = match hour {
+        0..=11 => "Good morning",
+        12..=17 => "Good afternoon",
+        _ => "Good evening",
+    };
 
-    let music = gtk::ToggleButton::with_label("Music");
-    music.add_css_class("pill");
-    music.set_group(Some(&all));
+    let greeting_text = if user_name.is_empty() || user_name == "Guest" {
+        greeting.to_string()
+    } else {
+        format!("{}, {}", greeting, user_name)
+    };
 
-    row.append(&all);
-    row.append(&music);
-    row
+    let greeting_label = gtk::Label::new(Some(&greeting_text));
+    greeting_label.add_css_class("greeting-text");
+    greeting_label.set_halign(gtk::Align::Start);
+
+    let subtitle = gtk::Label::new(Some("Ready for some high-fidelity listening? Your personalized library is updated."));
+    subtitle.add_css_class("greeting-subtitle");
+    subtitle.set_halign(gtk::Align::Start);
+
+    box_.append(&greeting_label);
+    box_.append(&subtitle);
+    box_
 }
 
-struct Shortcut {
-    title: &'static str,
-    icon: &'static str,
-}
+/// "For You" section with category cards matching the Stitch design.
+fn build_for_you_section() -> gtk::Box {
+    let section = gtk::Box::new(gtk::Orientation::Vertical, 16);
 
-fn shortcuts() -> Vec<Shortcut> {
-    vec![
-        Shortcut {
-            title: "Liked Songs",
-            icon: "starred-symbolic",
-        },
-        Shortcut {
-            title: "Recently Added",
-            icon: "document-open-recent-symbolic",
-        },
-        Shortcut {
-            title: "Top Tracks",
-            icon: "star-new-symbolic",
-        },
-        Shortcut {
-            title: "Discover Weekly",
-            icon: "media-playlist-shuffle-symbolic",
-        },
-    ]
-}
+    // Section header with navigation arrows
+    let (header, prev_btn, next_btn) = build_section_header("For You");
+    section.append(&header);
 
-/// A 2-wide grid of compact horizontal tiles ("Liked Songs", etc.) — same
-/// not-yet-wired pattern as `library_sidebar.rs` rows: disabled with a
-/// tooltip rather than silently doing nothing, since none of these map to
-/// a real view yet (they need a library/local-storage layer, not just a
-/// home feed — see `doc/GUIDE.md`'s build order).
-fn build_shortcuts_grid() -> gtk::FlowBox {
-    let flow = gtk::FlowBox::new();
-    flow.set_selection_mode(gtk::SelectionMode::None);
-    flow.set_max_children_per_line(2);
-    flow.set_min_children_per_line(1);
-    flow.set_row_spacing(10);
-    flow.set_column_spacing(10);
-    flow.set_homogeneous(true);
-    for shortcut in shortcuts() {
-        flow.insert(&shortcut_tile(&shortcut), -1);
+    // Category cards
+    let cards = gtk::Box::new(gtk::Orientation::Horizontal, 16);
+
+    let categories = vec![
+        ("PERSONALIZED", "Daily Mix 1", "Neon Drift, Arlowe Thorne, and more.", "media-playlist-shuffle-symbolic"),
+        ("PRODUCTIVITY", "Focus Flow", "Lofi beats for deep work sessions.", "audio-x-generic-symbolic"),
+        ("TOP TRACKS", "Heavy Rotation", "Your most played tracks this month.", "star-new-symbolic"),
+    ];
+
+    for (label, title, desc, icon) in categories {
+        let card = category_card(label, title, desc, icon);
+        cards.append(&card);
     }
-    flow
+
+    let scroller = gtk::ScrolledWindow::new();
+    scroller.set_vscrollbar_policy(gtk::PolicyType::Never);
+    scroller.set_hscrollbar_policy(gtk::PolicyType::External);
+    scroller.set_child(Some(&cards));
+    section.append(&scroller);
+
+    // Wire navigation arrows with smooth scrolling and disabled states
+    wire_carousel_arrows(&scroller, &prev_btn, &next_btn);
+
+    section
 }
 
-fn shortcut_tile(shortcut: &Shortcut) -> gtk::Widget {
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    row.add_css_class("card");
+/// A single category card for the "For You" section.
+fn category_card(label: &str, title: &str, description: &str, icon_name: &str) -> gtk::Widget {
+    let card = gtk::Box::new(gtk::Orientation::Horizontal, 16);
+    card.add_css_class("category-card");
+    card.set_size_request(300, -1);
 
-    let icon_frame = gtk::Frame::new(None);
-    icon_frame.add_css_class("home-art");
-    icon_frame.set_size_request(48, 48);
-    let icon = gtk::Image::from_icon_name(shortcut.icon);
-    icon.set_pixel_size(20);
+    let art = gtk::Frame::new(None);
+    art.add_css_class("category-art");
+    art.set_size_request(80, 80);
+    let icon = gtk::Image::from_icon_name(icon_name);
+    icon.set_pixel_size(28);
     icon.set_halign(gtk::Align::Center);
     icon.set_valign(gtk::Align::Center);
-    icon_frame.set_child(Some(&icon));
+    art.set_child(Some(&icon));
 
-    let label = gtk::Label::new(Some(shortcut.title));
-    label.add_css_class("heading");
-    label.set_halign(gtk::Align::Start);
-    label.set_hexpand(true);
-    label.set_margin_start(10);
-    label.set_margin_end(10);
-    label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    let info = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    info.set_valign(gtk::Align::Center);
+    info.set_hexpand(true);
 
-    row.append(&icon_frame);
-    row.append(&label);
+    let label_widget = gtk::Label::new(Some(label));
+    label_widget.add_css_class("category-label");
+    label_widget.set_halign(gtk::Align::Start);
+
+    let title_widget = gtk::Label::new(Some(title));
+    title_widget.add_css_class("category-title");
+    title_widget.set_halign(gtk::Align::Start);
+
+    let desc_widget = gtk::Label::new(Some(description));
+    desc_widget.add_css_class("category-description");
+    desc_widget.set_halign(gtk::Align::Start);
+    desc_widget.set_wrap(true);
+    desc_widget.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    desc_widget.set_max_width_chars(30);
+
+    info.append(&label_widget);
+    info.append(&title_widget);
+    info.append(&desc_widget);
+
+    card.append(&art);
+    card.append(&info);
 
     let button = gtk::Button::new();
     button.add_css_class("flat");
-    button.set_child(Some(&row));
-    button.set_sensitive(false);
-    button.set_tooltip_text(Some("coming soon — no library backend yet"));
+    button.set_child(Some(&card));
     button.upcast()
+}
+
+/// Section header with title and navigation arrows.
+fn build_section_header(title: &str) -> (gtk::Box, gtk::Button, gtk::Button) {
+    let header = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    header.set_hexpand(true);
+
+    let title_label = gtk::Label::new(Some(title));
+    title_label.add_css_class("section-title");
+    title_label.set_halign(gtk::Align::Start);
+    title_label.set_hexpand(true);
+
+    let arrows = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    let prev_btn = gtk::Button::from_icon_name("go-previous-symbolic");
+    prev_btn.add_css_class("nav-arrow");
+    let next_btn = gtk::Button::from_icon_name("go-next-symbolic");
+    next_btn.add_css_class("nav-arrow");
+    arrows.append(&prev_btn);
+    arrows.append(&next_btn);
+
+    header.append(&title_label);
+    header.append(&arrows);
+
+    (header, prev_btn, next_btn)
+}
+
+/// Wire carousel navigation arrows with smooth scrolling and disabled states.
+fn wire_carousel_arrows(scroller: &gtk::ScrolledWindow, prev_btn: &gtk::Button, next_btn: &gtk::Button) {
+    let scroll_amount = 300.0;
+
+    // Start with both buttons enabled (content may not be laid out yet)
+    prev_btn.set_sensitive(true);
+    next_btn.set_sensitive(true);
+
+    // Update button sensitivity based on scroll position
+    let update_buttons = {
+        let prev_btn = prev_btn.clone();
+        let next_btn = next_btn.clone();
+        let scroller = scroller.clone();
+        move || {
+            let adj = scroller.hadjustment();
+            // Only update if we have valid content (upper > lower + page_size means content exists)
+            if adj.upper() > adj.lower() + adj.page_size() {
+                let at_start = adj.value() <= adj.lower() + 1.0;
+                let at_end = adj.value() + adj.page_size() >= adj.upper() - 1.0;
+                prev_btn.set_sensitive(!at_start);
+                next_btn.set_sensitive(!at_end);
+            }
+            // If content not laid out yet, keep both enabled
+        }
+    };
+
+    // Connect adjustment value-changed to update button states
+    {
+        let update_buttons = update_buttons.clone();
+        let scroller = scroller.clone();
+        scroller.hadjustment().connect_value_changed(move |_| {
+            update_buttons();
+        });
+    }
+
+    // Connect map signal to update button states after widget is displayed
+    {
+        let update_buttons = update_buttons.clone();
+        scroller.connect_map(move |_| {
+            let update_buttons = update_buttons.clone();
+            // Delay slightly to ensure layout is complete
+            glib::timeout_add_local_once(std::time::Duration::from_millis(50), move || {
+                update_buttons();
+            });
+        });
+    }
+
+    // Previous button - scroll left
+    {
+        let scroller = scroller.clone();
+        prev_btn.connect_clicked(move |_| {
+            let adj = scroller.hadjustment();
+            let new_val = (adj.value() - scroll_amount).max(adj.lower());
+            adj.set_value(new_val);
+        });
+    }
+
+    // Next button - scroll right
+    {
+        let scroller = scroller.clone();
+        next_btn.connect_clicked(move |_| {
+            let adj = scroller.hadjustment();
+            let new_val = (adj.value() + scroll_amount).min(adj.upper() - adj.page_size());
+            adj.set_value(new_val);
+        });
+    }
 }
 
 /// The single big hero card, anchored to a real track from the first
@@ -391,14 +501,13 @@ fn build_row(
     on_select: Rc<dyn Fn(Track)>,
     on_play: Rc<dyn Fn(Track)>,
 ) -> gtk::Box {
-    let section = gtk::Box::new(gtk::Orientation::Vertical, 10);
+    let section = gtk::Box::new(gtk::Orientation::Vertical, 16);
 
-    let heading = gtk::Label::new(Some(title));
-    heading.add_css_class("title-2");
-    heading.set_halign(gtk::Align::Start);
-    section.append(&heading);
+    // Section header with navigation arrows
+    let (header, prev_btn, next_btn) = build_section_header(title);
+    section.append(&header);
 
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 14);
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 16);
     for track in tracks {
         row.append(&track_card(track, on_select.clone(), on_play.clone()));
     }
@@ -408,6 +517,9 @@ fn build_row(
     scroller.set_hscrollbar_policy(gtk::PolicyType::External);
     scroller.set_child(Some(&row));
     section.append(&scroller);
+
+    // Wire navigation arrows with smooth scrolling and disabled states
+    wire_carousel_arrows(&scroller, &prev_btn, &next_btn);
 
     section
 }
@@ -419,17 +531,16 @@ fn track_card(
     on_select: Rc<dyn Fn(Track)>,
     on_play: Rc<dyn Fn(Track)>,
 ) -> gtk::Widget {
-    let card = gtk::Box::new(gtk::Orientation::Vertical, 6);
-    card.set_width_request(150);
+    let card = gtk::Box::new(gtk::Orientation::Vertical, 8);
+    card.set_width_request(180);
 
     // Art with hover play overlay.
     let art_frame = gtk::Frame::new(None);
-    art_frame.add_css_class("card");
-    art_frame.add_css_class("home-art");
-    art_frame.set_size_request(150, 150);
+    art_frame.add_css_class("album-art");
+    art_frame.set_size_request(180, 180);
 
     let art_icon = gtk::Image::from_icon_name("emblem-music-symbolic");
-    art_icon.set_pixel_size(28);
+    art_icon.set_pixel_size(32);
     art_icon.set_halign(gtk::Align::Center);
     art_icon.set_valign(gtk::Align::Center);
     art_frame.set_child(Some(&art_icon));
@@ -437,9 +548,9 @@ fn track_card(
     if !track.thumbnail_url.is_empty() {
         let picture = gtk::Picture::new();
         picture.set_content_fit(gtk::ContentFit::Cover);
-        picture.set_size_request(150, 150);
+        picture.set_size_request(180, 180);
         art_frame.set_child(Some(&picture));
-        crate::ui::thumbnail_widget::spawn_fetch(track.thumbnail_url.clone(), 150, move |tex| {
+        crate::ui::thumbnail_widget::spawn_fetch(track.thumbnail_url.clone(), 180, move |tex| {
             picture.set_paintable(Some(&tex));
         });
     }
@@ -483,17 +594,16 @@ fn track_card(
     }
 
     let title_label = gtk::Label::new(Some(&track.title));
-    title_label.add_css_class("heading");
+    title_label.add_css_class("album-title");
     title_label.set_halign(gtk::Align::Start);
     title_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
-    title_label.set_max_width_chars(18);
+    title_label.set_max_width_chars(22);
 
     let artist_label = gtk::Label::new(Some(&track.artist));
-    artist_label.add_css_class("dim-label");
-    artist_label.add_css_class("caption");
+    artist_label.add_css_class("album-artist");
     artist_label.set_halign(gtk::Align::Start);
     artist_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
-    artist_label.set_max_width_chars(18);
+    artist_label.set_max_width_chars(22);
 
     card.append(&overlay);
     card.append(&title_label);
@@ -502,7 +612,7 @@ fn track_card(
     // Clicking the card navigates to detail.
     let button = gtk::Button::new();
     button.add_css_class("flat");
-    button.add_css_class("home-card");
+    button.add_css_class("album-card");
     button.set_child(Some(&card));
     {
         let on_select = on_select.clone();
