@@ -33,6 +33,7 @@ fn nav_items() -> Vec<NavItem> {
 
 pub struct LibrarySidebar {
     pub widget: gtk::Box,
+    pub settings_btn: gtk::Button,
 }
 impl Default for LibrarySidebar {
     fn default() -> Self {
@@ -131,17 +132,12 @@ impl LibrarySidebar {
             },
             false,
         );
-        let settings_btn = settings_row.downcast_ref::<gtk::Button>().unwrap();
+        let settings_btn = settings_row.downcast_ref::<gtk::Button>().unwrap().clone();
         settings_btn.set_tooltip_text(None);
-        // Settings click handler — opens About dialog via parent window
-        // For now, just a placeholder that does nothing visible
-        settings_btn.connect_clicked(|_| {
-            // The About dialog is wired in window.rs via the app action
-        });
         widget.append(&settings_row);
 
         widget.set_hexpand(false);
-        Self { widget }
+        Self { widget, settings_btn }
     }
 }
 

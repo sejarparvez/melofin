@@ -21,7 +21,9 @@ pub struct PlayerBar {
     seeking: Rc<Cell<bool>>,
     thumbnail: ThumbnailStack,
     /// Public handle so `window.rs` can connect the queue toggle.
-    pub queue_button: gtk::Button,
+    pub queue_button: gtk::MenuButton,
+    /// Clickable track info area — clicking navigates to Now Playing view.
+    pub track_info_area: gtk::Box,
 }
 
 impl PlayerBar {
@@ -176,7 +178,8 @@ impl PlayerBar {
         right_box.set_halign(gtk::Align::End);
         right_box.set_hexpand(true);
 
-        let queue_button = gtk::Button::from_icon_name("view-list-symbolic");
+        let queue_button = gtk::MenuButton::new();
+        queue_button.set_icon_name("view-list-symbolic");
         queue_button.add_css_class("icon-button");
         queue_button.set_tooltip_text(Some("Queue"));
 
@@ -275,6 +278,7 @@ impl PlayerBar {
             seeking,
             thumbnail,
             queue_button,
+            track_info_area: info_box,
         }
     }
 

@@ -1,0 +1,26 @@
+/* search.css — Search results popover */
+
+.search-popover {
+    background-color: @surface-container-high;
+    border-radius: 12px;
+    border: 1px solid alpha(@on-surface, 0.08);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    padding: 0;
+}
+
+/* Override default popover arrow/surface so our border + radius are visible */
+.search-popover > arrow {
+    background-color: @surface-container-high;
+    border: 1px solid alpha(@on-surface, 0.08);
+}
+
+/* Skeleton rows inside search popover */
+.search-popover .skeleton-block {
+    background-color: @surface-container;
+    border-radius: 4px;
+}
+
+/* "No results." / error label inside the popover */
+.search-popover label {
+    padding: 24px;
+}

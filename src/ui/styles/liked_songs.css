@@ -1,0 +1,25 @@
+/* liked_songs.css — Liked Songs page */
+
+/* Header: back button + title */
+.liked-header {
+    padding: 16px 20px 8px 20px;
+}
+
+.liked-header .title-1 {
+    color: @on-surface;
+}
+
+/* Show More button: pill with primary accent */
+.liked-show-more {
+    background-color: @primary;
+    color: @on-surface;
+    border: none;
+    border-radius: 999px;
+    padding: 8px 24px;
+    margin-top: 8px;
+    margin-bottom: 16px;
+}
+
+.liked-show-more:hover {
+    background-color: shade(@primary, 0.85);
+}

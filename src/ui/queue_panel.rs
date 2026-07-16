@@ -34,8 +34,8 @@ impl QueuePanel {
 
         let scrolled = gtk::ScrolledWindow::new();
         scrolled.set_vexpand(true);
-        scrolled.set_min_content_width(220);
-        scrolled.set_max_content_width(220);
+        scrolled.set_min_content_width(240);
+        scrolled.set_max_content_width(240);
         scrolled.set_hscrollbar_policy(gtk::PolicyType::Never);
         scrolled.set_child(Some(&list));
         content.append(&scrolled);

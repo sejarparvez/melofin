@@ -1,0 +1,18 @@
+/* Now Playing view — full content area */
+.now-playing-art {
+    border-radius: 16px;
+    box-shadow: 0 20px 80px -20px alpha(@primary, 0.5);
+}
+
+.now-playing-title {
+    font-size: 32px;
+    font-weight: 800;
+    color: @on-surface;
+    letter-spacing: -0.02em;
+}
+
+.now-playing-artist {
+    font-size: 18px;
+    color: @primary;
+    opacity: 0.9;
+}

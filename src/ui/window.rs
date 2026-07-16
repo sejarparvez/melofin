@@ -7,8 +7,11 @@ use crate::ui::home_view::HomeView;
 use crate::ui::library_sidebar::LibrarySidebar;
 use crate::ui::liked_songs_view::LikedSongsView;
 use crate::ui::login_dialog;
+use crate::ui::now_playing_view::NowPlayingView;
 use crate::ui::player_bar::PlayerBar;
+use crate::ui::queue_panel::QueuePanel;
 use crate::ui::search_view::SearchView;
+use crate::ui::settings_view::SettingsView;
 use crate::ui::top_bar::build_top_bar;
 use crate::user::UserProfile;
 use adw::prelude::*;
@@ -35,6 +38,12 @@ fn load_css() {
         include_str!("styles/player.css"),
         include_str!("styles/skeleton.css"),
         include_str!("styles/detail.css"),
+        include_str!("styles/now_playing.css"),
+        include_str!("styles/queue.css"),
+        include_str!("styles/now_playing_view.css"),
+        include_str!("styles/search.css"),
+        include_str!("styles/liked_songs.css"),
+        include_str!("styles/settings.css"),
     ]
     .join("\n");
 
@@ -388,6 +397,36 @@ fn build_ui(app: &adw::Application) {
 
     let player_bar = PlayerBar::new(handle.commands.clone());
 
+    // -- Now Playing view (content_stack page) ---------------------------------
+
+    let navigate_to_np = navigate_to.clone();
+    let go_back_np = go_back.clone();
+    let now_playing_view = NowPlayingView::new(Rc::new(move || go_back_np()));
+    now_playing_view.widget.set_hexpand(true);
+    now_playing_view.widget.set_vexpand(true);
+    content_stack.add_named(&now_playing_view.widget, Some("now_playing"));
+
+    // Clicking the track info area in the player bar opens Now Playing.
+    {
+        let navigate_to_np = navigate_to_np.clone();
+        let click = gtk::GestureClick::new();
+        click.connect_pressed(move |_, _, _, _| {
+            navigate_to_np("now_playing");
+        });
+        player_bar.track_info_area.add_controller(click);
+    }
+
+    // -- Queue popover (from player bar queue button) --------------------------
+
+    let queue_panel = QueuePanel::new(handle.commands.clone());
+    let queue_popover = gtk::Popover::new();
+    queue_popover.set_child(Some(&queue_panel.widget));
+    queue_popover.set_has_arrow(false);
+    queue_popover.set_position(gtk::PositionType::Top);
+    player_bar
+        .queue_button
+        .set_popover(Some(&queue_popover));
+
     // -- Library sidebar -------------------------------------------------------
 
     let content_stack_for_sidebar = content_stack.clone();
@@ -463,6 +502,17 @@ fn build_ui(app: &adw::Application) {
     window.set_default_height(720);
     window.set_content(Some(&toast_overlay));
 
+    // -- Settings button (needs window) -----------------------------------------
+
+    {
+        let window = window.clone();
+        let auth = auth.clone();
+        let data_dir = data_dir.clone();
+        library_sidebar.settings_btn.connect_clicked(move |_| {
+            SettingsView::present(&window, auth.clone(), data_dir.clone(), || {});
+        });
+    }
+
     // -- Account popover: login button (needs window + toast_overlay) ----------
 
     {
@@ -520,9 +570,10 @@ fn build_ui(app: &adw::Application) {
             match event {
                 PlayerEvent::State(state) => {
                     player_bar.update(&state);
+                    now_playing_view.update(&state);
                 }
-                PlayerEvent::Queue(_snapshot) => {
-                    // Queue panel removed per Stitch design
+                PlayerEvent::Queue(snapshot) => {
+                    queue_panel.update(&snapshot);
                 }
             }
         }

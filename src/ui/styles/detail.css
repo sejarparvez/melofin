@@ -43,7 +43,7 @@
 /* Action buttons */
 .play-artist-btn {
     background-color: @primary;
-    color: #ffffff;
+    color: @on-surface;
     border: none;
     border-radius: 999px;
     padding: 12px 24px;
@@ -56,13 +56,13 @@
 .follow-btn {
     background-color: transparent;
     color: @on-surface;
-    border: 1px solid alpha(@on-surface, 0.2);
+    border: 1px solid @outline;
     border-radius: 999px;
     padding: 12px 24px;
 }
 
 .follow-btn:hover {
-    border-color: alpha(@on-surface, 0.4);
+    border-color: alpha(@outline, 0.8);
     background-color: alpha(@on-surface, 0.05);
 }
 

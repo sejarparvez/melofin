@@ -1,0 +1,22 @@
+/* Now Playing panel — right sidebar */
+.now-playing-panel {
+    background-color: @surface-container-low;
+}
+
+.now-playing-heading {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: @on-surface;
+}
+
+.about-heading {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: @on-surface;
+    border-top: 1px solid alpha(@on-surface, 0.08);
+    padding-top: 12px;
+}
