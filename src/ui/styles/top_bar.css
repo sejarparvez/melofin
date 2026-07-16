@@ -1,9 +1,9 @@
 .top-bar {
-    background-color: #131313;
+    background-color: @surface-dim;
 }
 
 .top-bar-search {
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: alpha(@on-surface, 0.05);
     border-radius: 999px;
     min-height: 36px;
     padding-left: 12px;
@@ -11,5 +11,5 @@
 }
 
 .top-bar-search:focus-within {
-    background-color: rgba(124, 77, 255, 0.12);
+    background-color: alpha(@primary, 0.12);
 }

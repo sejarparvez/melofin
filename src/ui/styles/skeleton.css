@@ -1,5 +1,5 @@
 .skeleton-block {
-    background-color: #2a2a2a;
+    background-color: @surface-container-high;
     border-radius: 4px;
     animation: skeleton-pulse 1.2s ease-in-out infinite;
 }

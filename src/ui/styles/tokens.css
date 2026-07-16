@@ -1,19 +1,40 @@
-/* tokens.css — Stitch Design System colors */
+/* tokens.css — Stitch Design System Tokens */
 /* Loaded first; all other style files depend on these definitions. */
 
-/* Stitch Color Palette */
-@define-color surface #131313;
-@define-color surface-container #201f1f;
-@define-color surface-container-high #2a2a2a;
-@define-color on-surface #e5e2e1;
-@define-color on-surface-variant #cac3d8;
-@define-color primary #7c4dff;
-@define-color primary-light #cdbdff;
-@define-color secondary #14d1ff;
-@define-color outline #948ea1;
-@define-color outline-variant #494455;
+/* Surface hierarchy (Layer 0–4) */
+@define-color surface-dim                 #0e0e0e;
+@define-color surface-container-low      #1c1b1b;
+@define-color surface-container          #201f1f;
+@define-color surface-container-high     #2a2a2a;
+@define-color surface-container-highest  #353534;
+
+/* Foreground / text */
+@define-color on-surface                 #e5e2e1;
+@define-color on-surface-variant         #cac3d8;
+
+/* Primary accent */
+@define-color primary                    #7c4dff;
+@define-color primary-light              #cdbdff;
+
+/* Secondary */
+@define-color secondary                  #14d1ff;
+
+/* Outline */
+@define-color outline                    #948ea1;
+@define-color outline-variant            #494455;
+
+/* Semantic */
+@define-color success                    #4ade80;
+@define-color error                      #ffb4ab;
 
 /* Window background */
 window {
-    background-color: #131313;
+    background-color: @surface-dim;
+}
+
+/* Focus rings */
+button:focus-visible,
+entry:focus-visible {
+    outline-color: @primary;
+    outline-offset: 2px;
 }

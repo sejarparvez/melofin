@@ -2,7 +2,7 @@
 
 /* Hero section */
 .artist-hero {
-    background: linear-gradient(180deg, #1a1a2e 0%, #131313 100%);
+    background: linear-gradient(180deg, alpha(@primary, 0.12) 0%, @surface-dim 100%);
     border-radius: 16px;
     padding: 32px;
     margin: 32px 32px 0 32px;
@@ -16,33 +16,33 @@
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.05em;
-    color: #4ade80;
+    color: @success;
     margin-bottom: 8px;
 }
 
 .artist-name {
     font-size: 48px;
     font-weight: 800;
-    color: #e5e2e1;
+    color: @on-surface;
     letter-spacing: -0.02em;
     margin-bottom: 8px;
 }
 
 .monthly-listeners {
     font-size: 14px;
-    color: #948ea1;
+    color: @outline;
     margin-bottom: 16px;
 }
 
 .artist-bio {
     font-size: 14px;
-    color: #cac3d8;
+    color: @on-surface-variant;
     margin-bottom: 24px;
 }
 
 /* Action buttons */
 .play-artist-btn {
-    background-color: #7c4dff;
+    background-color: @primary;
     color: #ffffff;
     border: none;
     border-radius: 999px;
@@ -50,26 +50,26 @@
 }
 
 .play-artist-btn:hover {
-    background-color: #6a3de8;
+    background-color: shade(@primary, 0.85);
 }
 
 .follow-btn {
     background-color: transparent;
-    color: #e5e2e1;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: @on-surface;
+    border: 1px solid alpha(@on-surface, 0.2);
     border-radius: 999px;
     padding: 12px 24px;
 }
 
 .follow-btn:hover {
-    border-color: rgba(255, 255, 255, 0.4);
-    background-color: rgba(255, 255, 255, 0.05);
+    border-color: alpha(@on-surface, 0.4);
+    background-color: alpha(@on-surface, 0.05);
 }
 
 .more-btn {
     background-color: transparent;
-    color: #e5e2e1;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: @on-surface;
+    border: 1px solid alpha(@on-surface, 0.2);
     border-radius: 50%;
     min-width: 44px;
     min-height: 44px;
@@ -77,39 +77,34 @@
 }
 
 .more-btn:hover {
-    border-color: rgba(255, 255, 255, 0.4);
-    background-color: rgba(255, 255, 255, 0.05);
+    border-color: alpha(@on-surface, 0.4);
+    background-color: alpha(@on-surface, 0.05);
 }
 
 /* Section headers */
-.section-title {
-    font-size: 24px;
-    font-weight: 700;
-    color: #e5e2e1;
-}
 
 .show-all-link {
     font-size: 12px;
     font-weight: 600;
     letter-spacing: 0.05em;
-    color: #e5e2e1;
+    color: @on-surface;
     background: none;
     border: none;
     padding: 8px 12px;
 }
 
 .show-all-link:hover {
-    color: #7c4dff;
+    color: @primary;
 }
 
 /* Track table */
 .track-table-header {
     padding: 8px 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid alpha(@on-surface, 0.08);
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.05em;
-    color: #948ea1;
+    color: @outline;
 }
 
 .track-row {
@@ -119,48 +114,48 @@
 }
 
 .track-row:hover {
-    background-color: rgba(255, 255, 255, 0.04);
+    background-color: alpha(@on-surface, 0.04);
 }
 
 .track-number {
     min-width: 32px;
     font-size: 14px;
-    color: #948ea1;
+    color: @outline;
 }
 
 .track-art {
     min-width: 40px;
     min-height: 40px;
     border-radius: 4px;
-    background-color: #2a2a2a;
+    background-color: @surface-container-high;
 }
 
 .track-title {
     font-size: 14px;
     font-weight: 600;
-    color: #e5e2e1;
+    color: @on-surface;
 }
 
 .track-album {
     font-size: 12px;
-    color: #948ea1;
+    color: @outline;
 }
 
 .track-plays {
     min-width: 100px;
     font-size: 14px;
-    color: #948ea1;
+    color: @outline;
 }
 
 .track-duration {
     min-width: 60px;
     font-size: 14px;
-    color: #948ea1;
+    color: @outline;
 }
 
 /* About card */
 .about-card {
-    background-color: #1a1a2e;
+    background-color: alpha(@primary, 0.08);
     border-radius: 12px;
     padding: 24px;
 }
@@ -168,7 +163,7 @@
 .about-title {
     font-size: 20px;
     font-weight: 700;
-    color: #e5e2e1;
+    color: @on-surface;
     margin-bottom: 16px;
 }
 
@@ -181,5 +176,5 @@
 
 .about-text {
     font-size: 14px;
-    color: #cac3d8;
+    color: @on-surface-variant;
 }

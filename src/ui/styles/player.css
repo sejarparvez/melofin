@@ -1,7 +1,7 @@
 /* Player bar */
 .player-bar {
-    background-color: #131313;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background-color: @surface-container;
+    border-top: 1px solid alpha(@on-surface, 0.08);
     padding: 0;
     min-height: 64px;
 }
@@ -13,12 +13,12 @@
     border-radius: 16px;
     border: none;
     background: transparent;
-    color: #e5e2e1;
+    color: @on-surface;
     padding: 0;
 }
 
 .transport-button:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: alpha(@on-surface, 0.08);
 }
 
 .transport-button:disabled {
@@ -32,12 +32,12 @@
     border-radius: 20px;
     border: none;
     background: transparent;
-    color: #e5e2e1;
+    color: @on-surface;
     padding: 0;
 }
 
 .play-button:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: alpha(@on-surface, 0.08);
 }
 
 /* Heart/Like button */
@@ -47,22 +47,22 @@
     border-radius: 14px;
     border: none;
     background: transparent;
-    color: #948ea1;
+    color: @outline;
     padding: 0;
 }
 
 .heart-button:hover {
-    color: #e5e2e1;
+    color: @on-surface;
 }
 
 .heart-button.liked {
-    color: #7c4dff;
+    color: @primary;
 }
 
 /* Progress bar - thin track */
 scale.progress-bar trough {
     min-height: 3px;
-    background-color: rgba(255, 255, 255, 0.15);
+    background-color: alpha(@on-surface, 0.15);
     border-radius: 2px;
 }
 
@@ -71,7 +71,7 @@ scale.progress-bar trough:hover {
 }
 
 scale.progress-bar highlight {
-    background-color: #e5e2e1;
+    background-color: @primary;
     border-radius: 2px;
 }
 
@@ -79,7 +79,7 @@ scale.progress-bar slider {
     min-width: 12px;
     min-height: 12px;
     border-radius: 6px;
-    background-color: #e5e2e1;
+    background-color: @on-surface;
     border: none;
     margin: -4px;
 }
@@ -87,12 +87,12 @@ scale.progress-bar slider {
 /* Volume slider */
 scale.volume-scale trough {
     min-height: 3px;
-    background-color: rgba(255, 255, 255, 0.15);
+    background-color: alpha(@on-surface, 0.15);
     border-radius: 2px;
 }
 
 scale.volume-scale highlight {
-    background-color: #e5e2e1;
+    background-color: @on-surface;
     border-radius: 2px;
 }
 
@@ -103,30 +103,30 @@ scale.volume-scale highlight {
     border-radius: 14px;
     border: none;
     background: transparent;
-    color: #948ea1;
+    color: @outline;
     padding: 0;
 }
 
 .icon-button:hover {
-    color: #e5e2e1;
-    background: rgba(255, 255, 255, 0.08);
+    color: @on-surface;
+    background: alpha(@on-surface, 0.08);
 }
 
 /* Track info */
 .track-title {
     font-size: 14px;
     font-weight: 600;
-    color: #e5e2e1;
+    color: @on-surface;
 }
 
 .track-artist {
     font-size: 12px;
-    color: #948ea1;
+    color: @outline;
 }
 
 /* Time labels */
 .time-label {
     font-size: 11px;
-    color: #948ea1;
+    color: @outline;
     min-width: 36px;
 }

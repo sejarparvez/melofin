@@ -3,12 +3,12 @@
     font-size: 48px;
     font-weight: 800;
     letter-spacing: -0.02em;
-    color: #e5e2e1;
+    color: @on-surface;
 }
 
 .greeting-subtitle {
     font-size: 16px;
-    color: #cac3d8;
+    color: @on-surface-variant;
     margin-top: 4px;
 }
 
@@ -16,7 +16,7 @@
 .section-title {
     font-size: 24px;
     font-weight: 700;
-    color: #e5e2e1;
+    color: @on-surface;
 }
 
 /* Navigation arrows */
@@ -24,19 +24,19 @@
     min-width: 32px;
     min-height: 32px;
     border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(255, 255, 255, 0.05);
-    color: #e5e2e1;
+    border: 1px solid alpha(@on-surface, 0.1);
+    background: alpha(@on-surface, 0.05);
+    color: @on-surface;
     padding: 0;
 }
 
 .nav-arrow:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: alpha(@on-surface, 0.1);
 }
 
 .nav-arrow:disabled {
     opacity: 0.3;
-    border-color: rgba(255, 255, 255, 0.05);
+    border-color: alpha(@on-surface, 0.05);
     background: transparent;
 }
 
@@ -49,44 +49,44 @@
 
 .album-card:hover {
     transform: translateY(-4px);
-    background-color: rgba(255, 255, 255, 0.06);
+    background-color: alpha(@on-surface, 0.06);
 }
 
 .album-art {
-    background-color: #2a2a2a;
+    background-color: @surface-container-high;
     border-radius: 12px;
 }
 
 .album-title {
     font-size: 16px;
     font-weight: 600;
-    color: #e5e2e1;
+    color: @on-surface;
     margin-top: 12px;
 }
 
 .album-artist {
     font-size: 14px;
-    color: #cac3d8;
+    color: @on-surface-variant;
     margin-top: 4px;
 }
 
 /* Category cards (For You section) */
 .category-card {
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid alpha(@on-surface, 0.1);
     border-radius: 12px;
     padding: 16px;
     transition: background-color 200ms ease;
 }
 
 .category-card:hover {
-    background-color: rgba(255, 255, 255, 0.06);
+    background-color: alpha(@on-surface, 0.06);
 }
 
 .category-art {
     min-width: 80px;
     min-height: 80px;
     border-radius: 8px;
-    background-color: #2a2a2a;
+    background-color: @surface-container-high;
 }
 
 .category-label {
@@ -94,23 +94,23 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #7c4dff;
+    color: @primary;
 }
 
 .category-title {
     font-size: 16px;
     font-weight: 600;
-    color: #e5e2e1;
+    color: @on-surface;
 }
 
 .category-description {
     font-size: 14px;
-    color: #cac3d8;
+    color: @on-surface-variant;
 }
 
 /* Home card (legacy, kept for compatibility) */
 .home-art {
-    background-color: #2a2a2a;
+    background-color: @surface-container-high;
     border-radius: 12px;
 }
 
@@ -121,15 +121,15 @@
 }
 
 .home-card:hover {
-    background-color: rgba(124, 77, 255, 0.08);
+    background-color: alpha(@primary, 0.08);
     transform: translateY(-2px);
 }
 
 .home-card:hover .home-art {
-    background-color: rgba(124, 77, 255, 0.15);
+    background-color: alpha(@primary, 0.15);
 }
 
 .hero-card {
-    background: #7c4dff;
+    background: @primary;
     border-radius: 16px;
 }
