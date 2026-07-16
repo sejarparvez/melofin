@@ -127,6 +127,7 @@
 
 .home-card:hover .home-art {
     background-color: alpha(@primary, 0.15);
+    box-shadow: 0 4px 20px alpha(@primary, 0.3);
 }
 
 .hero-card {
