@@ -5,3 +5,4 @@ rustypipe_reports/
 bg_snapshot.bin
 .mimocode
 .zed
+.playwright-mcp
