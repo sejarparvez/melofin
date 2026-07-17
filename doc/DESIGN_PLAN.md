@@ -43,8 +43,8 @@ Phased implementation guide for improving the visual design of Melofin, using th
 
 | Goal                              | Approach                                                              |
 | --------------------------------- | --------------------------------------------------------------------- |
-| Stitch brand identity             | Use the Stitch color palette as the canonical source                 |
-| Solid surfaces (no glassmorphism) | Use Stitch surface tones for a 5-layer depth hierarchy               |
+| Stitch brand identity             | Use the Stitch color palette as the canonical source                  |
+| Solid surfaces (no glassmorphism) | Use Stitch surface tones for a 5-layer depth hierarchy                |
 | Consistent with GNOME ecosystem   | Leverage existing libadwaita CSS classes, minimize overrides          |
 | Page-by-page implementation       | Start with global tokens, then tackle one page at a time              |
 | Match Stitch design intent        | Adopt layout proportions, spacing, and component patterns from Stitch |
@@ -293,37 +293,37 @@ The Stitch project "Sleek Linux Music Player" contains these designs:
 
 /* Window background */
 window {
-    background-color: @surface-dim;
+  background-color: @surface-dim;
 }
 ```
 
 2. **Replace all hardcoded hex in component files** with token references. Key mappings:
 
-| Current Hardcoded                       | Replace With                                         |
-| --------------------------------------- | ---------------------------------------------------- |
-| `#131313` (window, sidebar, top bar)    | `@surface-dim`                                       |
-| `#1c1b1b` (if used)                    | `@surface-container-low`                             |
-| `#201f1f` (if used)                    | `@surface-container`                                 |
-| `#2a2a2a` (card/skeleton bg)            | `@surface-container-high`                            |
-| `#353534` (if used)                    | `@surface-container-highest`                         |
-| `#7c4dff` (accent everywhere)           | `@primary-container`                                 |
-| `#cdbdff` (light accent text)           | `@primary`                                           |
-| `#e5e2e1` (primary text)                | `@on-surface`                                        |
-| `#cac3d8` (secondary text)              | `@on-surface-variant`                                |
-| `#948ea1` (muted text)                  | `@outline`                                           |
-| `#494455` (if used)                    | `@outline-variant`                                   |
-| `#4ade80` (verified badge)              | `@success`                                           |
-| `#ffb4ab` (error, if used)             | `@error`                                             |
-| `rgba(255,255,255,0.05)` (search bg)    | `alpha(@on-surface, 0.05)`                           |
-| `rgba(255,255,255,0.06)` (hover)        | `alpha(@on-surface, 0.06)`                           |
-| `rgba(255,255,255,0.08)` (borders)      | `alpha(@on-surface, 0.08)`                           |
-| `rgba(255,255,255,0.1)` (border hover)  | `alpha(@on-surface, 0.1)`                            |
-| `rgba(124,77,255,0.15)` (active bg)     | `alpha(@primary-container, 0.15)`                    |
-| `rgba(124,77,255,0.08)` (card hover)    | `alpha(@primary-container, 0.08)`                    |
-| `rgba(124,77,255,0.12)` (search focus)  | `alpha(@primary-container, 0.12)`                    |
-| `#6a3de8` (button hover)                | `shade(@primary-container, 0.85)`                    |
-| `#1a1a2e` (hero gradient start)         | `alpha(@primary-container, 0.12)`                    |
-| `#1a1a2e` (about card bg)               | `alpha(@primary-container, 0.08)`                    |
+| Current Hardcoded                      | Replace With                      |
+| -------------------------------------- | --------------------------------- |
+| `#131313` (window, sidebar, top bar)   | `@surface-dim`                    |
+| `#1c1b1b` (if used)                    | `@surface-container-low`          |
+| `#201f1f` (if used)                    | `@surface-container`              |
+| `#2a2a2a` (card/skeleton bg)           | `@surface-container-high`         |
+| `#353534` (if used)                    | `@surface-container-highest`      |
+| `#7c4dff` (accent everywhere)          | `@primary-container`              |
+| `#cdbdff` (light accent text)          | `@primary`                        |
+| `#e5e2e1` (primary text)               | `@on-surface`                     |
+| `#cac3d8` (secondary text)             | `@on-surface-variant`             |
+| `#948ea1` (muted text)                 | `@outline`                        |
+| `#494455` (if used)                    | `@outline-variant`                |
+| `#4ade80` (verified badge)             | `@success`                        |
+| `#ffb4ab` (error, if used)             | `@error`                          |
+| `rgba(255,255,255,0.05)` (search bg)   | `alpha(@on-surface, 0.05)`        |
+| `rgba(255,255,255,0.06)` (hover)       | `alpha(@on-surface, 0.06)`        |
+| `rgba(255,255,255,0.08)` (borders)     | `alpha(@on-surface, 0.08)`        |
+| `rgba(255,255,255,0.1)` (border hover) | `alpha(@on-surface, 0.1)`         |
+| `rgba(124,77,255,0.15)` (active bg)    | `alpha(@primary-container, 0.15)` |
+| `rgba(124,77,255,0.08)` (card hover)   | `alpha(@primary-container, 0.08)` |
+| `rgba(124,77,255,0.12)` (search focus) | `alpha(@primary-container, 0.12)` |
+| `#6a3de8` (button hover)               | `shade(@primary-container, 0.85)` |
+| `#1a1a2e` (hero gradient start)        | `alpha(@primary-container, 0.12)` |
+| `#1a1a2e` (about card bg)              | `alpha(@primary-container, 0.08)` |
 
 3. **Fix progress bar fill** — change from `#e5e2e1` (white) to `@primary-container` (accent) per Stitch design.
 
@@ -333,8 +333,8 @@ window {
 /* Focus rings */
 button:focus-visible,
 entry:focus-visible {
-    outline-color: @primary-container;
-    outline-offset: 2px;
+  outline-color: @primary-container;
+  outline-offset: 2px;
 }
 ```
 
@@ -568,10 +568,10 @@ cargo build
 
 ## Summary
 
-| Phase | Scope                | Status                                                   | Prerequisites |
-| ----- | -------------------- | -------------------------------------------------------- | ------------- |
+| Phase | Scope                | Status                                                    | Prerequisites |
+| ----- | -------------------- | --------------------------------------------------------- | ------------- |
 | 0     | Global design tokens | **In Progress** — CSS split done, token references needed | None          |
-| 1     | Library Dashboard    | **Partial** — CSS exists, needs token references         | Phase 0       |
+| 1     | Library Dashboard    | **Partial** — CSS exists, needs token references          | Phase 0       |
 | 2     | Now Playing View     | **Not started** — panels exist but not wired              | Phase 0       |
 | 3     | Explore & Search     | **Not started** — no search CSS file                      | Phase 0       |
 | 4     | Liked Songs + Artist | **Partial** — detail.css exists, liked_songs has no CSS   | Phase 0       |

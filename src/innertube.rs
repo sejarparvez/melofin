@@ -31,7 +31,7 @@ pub(crate) fn build_innertube_request(url: &str, cookie_header: &str) -> ureq::R
         .set("X-Goog-Api-Format-Version", "1")
         .set("X-YouTube-Client-Name", "67")
         .set("X-YouTube-Client-Version", CLIENT_VERSION)
-        .timeout(std::time::Duration::from_secs(15));
+        .timeout(std::time::Duration::from_secs(30));
 
     if let Some(auth) = build_sapisidhash(cookie_header, ORIGIN) {
         req = req.set("Authorization", &auth);
@@ -118,15 +118,17 @@ pub fn browse_home(cookies_path: &Path) -> Result<HomeFeed> {
     // browse_ids in parallel.
     let mut sections = browse_home_with_continuations(&cookie_header, &api_key);
 
-    let handles: Vec<_> = EXTRA_BROWSE_IDS
-        .iter()
-        .map(|(browse_id, _title)| {
-            let cookie = cookie_header.clone();
-            let key = api_key.clone();
-            let id = browse_id.to_string();
-            std::thread::spawn(move || browse_section(&cookie, &key, &id))
-        })
-        .collect();
+    let mut handles = Vec::with_capacity(EXTRA_BROWSE_IDS.len());
+    for (i, (browse_id, _title)) in EXTRA_BROWSE_IDS.iter().enumerate() {
+        let cookie = cookie_header.clone();
+        let key = api_key.clone();
+        let id = browse_id.to_string();
+        handles.push(std::thread::spawn(move || browse_section(&cookie, &key, &id)));
+        // Stagger requests so they don't all hit YouTube simultaneously.
+        if i + 1 < EXTRA_BROWSE_IDS.len() {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+        }
+    }
 
     for (handle, &(_, title)) in handles.into_iter().zip(EXTRA_BROWSE_IDS.iter()) {
         match handle.join() {
@@ -198,6 +200,9 @@ fn browse_home_with_continuations(cookie_header: &str, api_key: &str) -> Vec<Hom
 ///   fresh browse ID.
 /// - Otherwise, sends `browse_id` if provided, or falls back to
 ///   `FEmusic_home` (the personalized home feed) if `browse_id` is `None`.
+///
+/// Retries up to 2 times on transient failures (timeouts, 429, 5xx) with
+/// exponential backoff.
 pub(crate) fn browse_request(
     cookie_header: &str,
     api_key: &str,
@@ -233,13 +238,45 @@ pub(crate) fn browse_request(
         })
     };
 
-    let text = build_innertube_request(&url, cookie_header)
-        .send_string(&body.to_string())
-        .context("browse endpoint request failed")?
-        .into_string()
-        .context("couldn't read browse response body")?;
+    let body_str = body.to_string();
+    let max_retries = 2;
+    let mut last_err: Option<anyhow::Error> = None;
 
-    serde_json::from_str(&text).context("browse response is not valid JSON")
+    for attempt in 0..=max_retries {
+        if attempt > 0 {
+            let delay_ms = 500 * (1u64 << (attempt - 1)); // 500ms, 1000ms
+            tracing::debug!(attempt, delay_ms, "retrying browse request");
+            std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+        }
+
+        match build_innertube_request(&url, cookie_header).send_string(&body_str) {
+            Ok(response) => {
+                let status = response.status();
+                if status == 429 || (500..600).contains(&status) {
+                    tracing::warn!(attempt, status, "browse request got retryable status");
+                    last_err = Some(anyhow::anyhow!("HTTP {status}"));
+                    continue;
+                }
+                let text = response
+                    .into_string()
+                    .context("couldn't read browse response body")?;
+                return serde_json::from_str(&text).context("browse response is not valid JSON");
+            }
+            Err(e) => {
+                let msg = e.to_string();
+                let is_retryable =
+                    msg.contains("timed out") || msg.contains("connection reset") || msg.contains("connection closed");
+                if is_retryable && attempt < max_retries {
+                    tracing::warn!(attempt, error = %e, "retryable browse request error");
+                    last_err = Some(e.into());
+                    continue;
+                }
+                return Err(e).context("browse endpoint request failed");
+            }
+        }
+    }
+
+    Err(last_err.unwrap_or_else(|| anyhow::anyhow!("browse request failed after retries")))
 }
 
 /// Searches YouTube Music for an artist by name and returns their UC-prefixed
