@@ -1,6 +1,7 @@
 //! GTK4/libadwaita UI, split by concern so the Spotify-style bottom player
 //! bar (`player_bar`) can grow independently of the search/results view.
 pub mod detail_view;
+pub mod explore_view;
 pub mod home_view;
 pub mod library_sidebar;
 pub mod liked_songs_view;

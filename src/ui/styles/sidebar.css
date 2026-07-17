@@ -1,27 +1,51 @@
+/* sidebar.css — Library sidebar navigation */
+/* Matches Stitch: glass panel, active state with primary tint + left border */
+
 .sidebar {
-    background-color: @surface-container-low;
-    border-radius: 8px;
+    background-color: alpha(@surface-dim, 0.8);
+    border-right: 1px solid alpha(@on-surface, 0.1);
 }
 
+/* Nav rows */
 .library-row {
-    padding: 8px 12px;
+    padding: 12px 24px;
     border-radius: 8px;
-    transition: background-color 200ms ease;
+    border-left: 4px solid transparent;
+    transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease;
+    color: @on-surface-variant;
 }
 
 .library-row:hover {
-    background-color: alpha(@on-surface, 0.06);
+    background-color: alpha(@on-surface, 0.05);
+    color: @on-surface;
 }
 
+/* Active nav row: primary tint + solid left accent */
 .library-row.active {
     background-color: alpha(@primary, 0.15);
-    border-left: 4px solid @primary;
+    border-left-color: @primary;
+    color: @primary;
+    font-weight: 700;
 }
 
+/* Small chips / badges in sidebar */
 .library-chip {
     min-height: 20px;
     min-width: 0;
     padding: 1px 8px;
     border-radius: 999px;
     font-size: 0.8rem;
+}
+
+/* Settings row pinned to bottom */
+.sidebar-settings-row {
+    padding: 12px 24px;
+    border-radius: 8px;
+    transition: background-color 200ms ease, color 200ms ease;
+    color: @on-surface-variant;
+}
+
+.sidebar-settings-row:hover {
+    background-color: alpha(@on-surface, 0.05);
+    color: @on-surface;
 }

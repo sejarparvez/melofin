@@ -1,31 +1,67 @@
-/* tokens.css — Stitch Design System Tokens */
-/* Loaded first; all other style files depend on these definitions. */
+/* tokens.css — Stitch "Sonic Integration" Design System Tokens */
+/* Matches the Stitch HTML color palette exactly. */
 
 /* Surface hierarchy (Layer 0–4) */
-@define-color surface-dim                 #0e0e0e;
+@define-color surface-dim                 #131313;
 @define-color surface-container-low      #1c1b1b;
 @define-color surface-container          #201f1f;
 @define-color surface-container-high     #2a2a2a;
 @define-color surface-container-highest  #353534;
+@define-color surface-bright             #393939;
+@define-color surface-variant            #353534;
 
 /* Foreground / text */
 @define-color on-surface                 #e5e2e1;
 @define-color on-surface-variant         #cac3d8;
+@define-color on-background              #e5e2e1;
 
-/* Primary accent */
-@define-color primary                    #7c4dff;
-@define-color primary-light              #cdbdff;
+/* Primary — light lavender text, deep violet container */
+@define-color primary                    #cdbdff;
+@define-color on-primary                 #370096;
+@define-color primary-container          #7c4dff;
+@define-color on-primary-container       #fcf6ff;
+@define-color primary-fixed              #e8deff;
+@define-color primary-fixed-dim          #cdbdff;
+@define-color on-primary-fixed           #20005f;
+@define-color on-primary-fixed-variant   #4f00d0;
+@define-color inverse-primary            #6833ea;
 
-/* Secondary */
-@define-color secondary                  #14d1ff;
+/* Secondary — light cyan */
+@define-color secondary                  #a6e6ff;
+@define-color on-secondary               #003543;
+@define-color secondary-container        #14d1ff;
+@define-color on-secondary-container     #00566b;
+@define-color secondary-fixed            #b7eaff;
+@define-color secondary-fixed-dim        #4cd6ff;
+@define-color on-secondary-fixed         #001f28;
+@define-color on-secondary-fixed-variant #004e60;
+
+/* Tertiary — warm orange */
+@define-color tertiary                   #ffb688;
+@define-color on-tertiary                #512400;
+@define-color tertiary-container         #b55800;
+@define-color on-tertiary-container      #fff7f4;
+@define-color tertiary-fixed             #ffdbc7;
+@define-color tertiary-fixed-dim         #ffb688;
+@define-color on-tertiary-fixed          #311300;
+@define-color on-tertiary-fixed-variant  #733600;
 
 /* Outline */
 @define-color outline                    #948ea1;
 @define-color outline-variant            #494455;
 
+/* Inverse (for toasts, overlays) */
+@define-color inverse-surface            #e5e2e1;
+@define-color inverse-on-surface         #313030;
+
+/* Surface tint */
+@define-color surface-tint               #cdbdff;
+
 /* Semantic */
-@define-color success                    #4ade80;
 @define-color error                      #ffb4ab;
+@define-color error-container            #93000a;
+@define-color on-error                   #690005;
+@define-color on-error-container         #ffdad6;
 
 /* Window background */
 window {

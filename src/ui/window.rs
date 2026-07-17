@@ -3,6 +3,7 @@ use crate::detail_fetch;
 use crate::player::{self, PlayerCommand, PlayerEvent};
 use crate::search::{MediaKind, Track};
 use crate::ui::detail_view::DetailView;
+use crate::ui::explore_view::ExploreView;
 use crate::ui::home_view::HomeView;
 use crate::ui::library_sidebar::LibrarySidebar;
 use crate::ui::liked_songs_view::LikedSongsView;
@@ -38,6 +39,7 @@ fn load_css() {
         include_str!("styles/player.css"),
         include_str!("styles/skeleton.css"),
         include_str!("styles/detail.css"),
+        include_str!("styles/explore.css"),
         include_str!("styles/now_playing.css"),
         include_str!("styles/queue.css"),
         include_str!("styles/now_playing_view.css"),
@@ -295,6 +297,8 @@ fn build_ui(app: &adw::Application) {
                     &[track],
                     play_from_list.clone(),
                     go_back_for_select.clone(),
+                    &[],
+                    &[],
                 );
                 detail.widget.set_hexpand(true);
                 detail.widget.set_vexpand(true);
@@ -347,6 +351,8 @@ fn build_ui(app: &adw::Application) {
                                 &detail.tracks,
                                 play_from_list_clone,
                                 on_back,
+                                &[],
+                                &[],
                             );
                             detail_view.widget.set_hexpand(true);
                             detail_view.widget.set_vexpand(true);
@@ -384,6 +390,13 @@ fn build_ui(app: &adw::Application) {
     );
     content_stack.add_named(&home_view.widget, Some("home"));
     content_stack.set_visible_child(&home_view.widget);
+
+    // -- Explore view (content_stack page) ------------------------------------
+
+    let explore_view = ExploreView::new(on_select.clone(), play_track.clone());
+    explore_view.widget.set_hexpand(true);
+    explore_view.widget.set_vexpand(true);
+    content_stack.add_named(&explore_view.widget, Some("explore"));
 
     {
         let navigate_to_home = navigate_to.clone();
@@ -460,6 +473,8 @@ fn build_ui(app: &adw::Application) {
         move |name| {
             if name == "Library" {
                 navigate_to_home("home");
+            } else if name == "Explore" {
+                navigate_to_home("explore");
             }
         },
     );

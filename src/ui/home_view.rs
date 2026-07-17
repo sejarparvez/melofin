@@ -126,12 +126,27 @@ fn load_feed(
         }
 
         for section in feed.sections {
-            container.append(&build_row(
-                &section.title,
-                section.tracks,
-                on_select.clone(),
-                on_play.clone(),
-            ));
+            if section.title == "New releases" || section.title == "New Releases" {
+                container.append(&build_numbered_row(
+                    &section.title,
+                    section.tracks,
+                    on_select.clone(),
+                    on_play.clone(),
+                ));
+            } else if section.title == "Recently Played" {
+                container.append(&build_recently_played_row(
+                    section.tracks,
+                    on_select.clone(),
+                    on_play.clone(),
+                ));
+            } else {
+                container.append(&build_row(
+                    &section.title,
+                    section.tracks,
+                    on_select.clone(),
+                    on_play.clone(),
+                ));
+            }
         }
     });
 }
@@ -342,6 +357,26 @@ fn build_section_header(title: &str) -> (gtk::Box, gtk::Button, gtk::Button) {
     (header, prev_btn, next_btn)
 }
 
+/// Section header with title and a right-aligned link (e.g. "VIEW ALL").
+fn build_section_header_with_link(title: &str, link_text: &str) -> gtk::Box {
+    let header = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    header.set_hexpand(true);
+
+    let title_label = gtk::Label::new(Some(title));
+    title_label.add_css_class("section-title");
+    title_label.set_halign(gtk::Align::Start);
+    title_label.set_hexpand(true);
+
+    let link = gtk::Button::with_label(link_text);
+    link.add_css_class("section-header-link");
+    link.set_halign(gtk::Align::End);
+
+    header.append(&title_label);
+    header.append(&link);
+
+    header
+}
+
 /// Wire carousel navigation arrows with smooth scrolling and disabled states.
 fn wire_carousel_arrows(scroller: &gtk::ScrolledWindow, prev_btn: &gtk::Button, next_btn: &gtk::Button) {
     let scroll_amount = 300.0;
@@ -494,6 +529,31 @@ fn build_hero_card(
     card.upcast()
 }
 
+/// "Recently Played" section with "VIEW ALL" link and horizontal card scroll.
+fn build_recently_played_row(
+    tracks: Vec<Track>,
+    on_select: Rc<dyn Fn(Track)>,
+    on_play: Rc<dyn Fn(Track)>,
+) -> gtk::Box {
+    let section = gtk::Box::new(gtk::Orientation::Vertical, 16);
+
+    let header = build_section_header_with_link("Recently Played", "VIEW ALL");
+    section.append(&header);
+
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 16);
+    for track in tracks {
+        row.append(&track_card(track, on_select.clone(), on_play.clone()));
+    }
+
+    let scroller = gtk::ScrolledWindow::new();
+    scroller.set_vscrollbar_policy(gtk::PolicyType::Never);
+    scroller.set_hscrollbar_policy(gtk::PolicyType::External);
+    scroller.set_child(Some(&row));
+    section.append(&scroller);
+
+    section
+}
+
 /// A titled, horizontally-scrolling row of cards.
 fn build_row(
     title: &str,
@@ -522,6 +582,179 @@ fn build_row(
     wire_carousel_arrows(&scroller, &prev_btn, &next_btn);
 
     section
+}
+
+/// A titled, vertically-scrolling numbered track list (for "New Releases", etc.).
+fn build_numbered_row(
+    title: &str,
+    tracks: Vec<Track>,
+    on_select: Rc<dyn Fn(Track)>,
+    on_play: Rc<dyn Fn(Track)>,
+) -> gtk::Box {
+    let section = gtk::Box::new(gtk::Orientation::Vertical, 16);
+
+    // Section header with link
+    let header = build_section_header_with_link(title, "DISCOVER NEW");
+    section.append(&header);
+
+    // Column headers
+    let col_header = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    col_header.add_css_class("numbered-list-header");
+    col_header.set_margin_start(44); // align past number column
+    col_header.set_margin_end(12);
+
+    let hash_label = gtk::Label::new(Some("#"));
+    hash_label.set_halign(gtk::Align::Start);
+    let title_hdr = gtk::Label::new(Some("Title"));
+    title_hdr.set_halign(gtk::Align::Start);
+    title_hdr.set_hexpand(true);
+    let album_hdr = gtk::Label::new(Some("Album"));
+    album_hdr.set_halign(gtk::Align::Start);
+    album_hdr.set_size_request(120, -1);
+    let dur_hdr = gtk::Label::new(Some("Duration"));
+    dur_hdr.set_halign(gtk::Align::End);
+    dur_hdr.set_size_request(48, -1);
+
+    col_header.append(&hash_label);
+    col_header.append(&title_hdr);
+    col_header.append(&album_hdr);
+    col_header.append(&dur_hdr);
+    section.append(&col_header);
+
+    // Track rows
+    let list = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    for (i, track) in tracks.into_iter().enumerate() {
+        list.append(&numbered_track_row(
+            i + 1,
+            track,
+            on_select.clone(),
+            on_play.clone(),
+        ));
+    }
+    section.append(&list);
+
+    section
+}
+
+/// A single row in a numbered track list.
+fn numbered_track_row(
+    number: usize,
+    track: Track,
+    on_select: Rc<dyn Fn(Track)>,
+    on_play: Rc<dyn Fn(Track)>,
+) -> gtk::Widget {
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    row.add_css_class("numbered-track-row");
+
+    // Number
+    let num_label = gtk::Label::new(Some(&format!("{:02}", number)));
+    num_label.add_css_class("numbered-track-number");
+    num_label.set_halign(gtk::Align::Center);
+    num_label.set_valign(gtk::Align::Center);
+
+    // Play button (hidden, replaces number on hover)
+    let play_btn = gtk::Button::from_icon_name("media-playback-start-symbolic");
+    play_btn.add_css_class("numbered-track-play");
+    play_btn.set_halign(gtk::Align::Center);
+    play_btn.set_valign(gtk::Align::Center);
+    {
+        let on_play = on_play.clone();
+        let track_clone = track.clone();
+        play_btn.connect_clicked(move |_| {
+            on_play(track_clone.clone());
+        });
+    }
+
+    // Stack number + play button in same position
+    let num_stack = gtk::Overlay::new();
+    num_stack.set_size_request(32, -1);
+    num_stack.set_child(Some(&num_label));
+    num_stack.add_overlay(&play_btn);
+
+    // Thumbnail
+    let art = gtk::Frame::new(None);
+    art.add_css_class("numbered-track-art");
+    art.set_size_request(40, 40);
+
+    if !track.thumbnail_url.is_empty() {
+        let picture = gtk::Picture::new();
+        picture.set_content_fit(gtk::ContentFit::Cover);
+        picture.set_size_request(40, 40);
+        art.set_child(Some(&picture));
+        let url = track.thumbnail_url.clone();
+        crate::ui::thumbnail_widget::spawn_fetch(url, 40, move |tex| {
+            picture.set_paintable(Some(&tex));
+        });
+    }
+
+    // Title + artist
+    let info = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    info.add_css_class("numbered-track-info");
+    info.set_valign(gtk::Align::Center);
+
+    let title_label = gtk::Label::new(Some(&track.title));
+    title_label.add_css_class("numbered-track-title");
+    title_label.set_halign(gtk::Align::Start);
+    title_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    title_label.set_max_width_chars(40);
+
+    let artist_label = gtk::Label::new(Some(&track.artist));
+    artist_label.add_css_class("numbered-track-artist");
+    artist_label.set_halign(gtk::Align::Start);
+    artist_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    artist_label.set_max_width_chars(40);
+
+    info.append(&title_label);
+    info.append(&artist_label);
+
+    // Album name
+    let album_text = track.album.as_deref().unwrap_or("");
+    let album_label = gtk::Label::new(Some(album_text));
+    album_label.add_css_class("numbered-track-album");
+    album_label.set_halign(gtk::Align::Start);
+    album_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    album_label.set_max_width_chars(20);
+    album_label.set_size_request(120, -1);
+
+    // Duration
+    let dur_text = track.duration.as_deref().unwrap_or("--:--");
+    let dur_label = gtk::Label::new(Some(dur_text));
+    dur_label.add_css_class("numbered-track-duration");
+    dur_label.set_halign(gtk::Align::End);
+    dur_label.set_size_request(48, -1);
+
+    // Favorite button (visual placeholder)
+    let fav_btn = gtk::Button::from_icon_name("favorite-border-symbolic");
+    fav_btn.add_css_class("flat");
+    fav_btn.add_css_class("circular");
+    fav_btn.set_size_request(28, 28);
+
+    // More button
+    let more_btn = gtk::Button::from_icon_name("view-more-symbolic");
+    more_btn.add_css_class("flat");
+    more_btn.add_css_class("circular");
+    more_btn.set_size_request(28, 28);
+
+    row.append(&num_stack);
+    row.append(&art);
+    row.append(&info);
+    row.append(&fav_btn);
+    row.append(&album_label);
+    row.append(&dur_label);
+    row.append(&more_btn);
+
+    // Clicking the row navigates to detail
+    {
+        let on_select = on_select.clone();
+        let track_clone = track.clone();
+        let click = gtk::GestureClick::new();
+        click.connect_pressed(move |_, _, _, _| {
+            on_select(track_clone.clone());
+        });
+        row.add_controller(click);
+    }
+
+    row.upcast()
 }
 
 /// A single card with hover play icon. Clicking the card navigates to

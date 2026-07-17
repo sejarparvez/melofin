@@ -1,214 +1,134 @@
-/* settings.css — Settings dialog */
+/* settings.css — Settings View */
 
-/* Bento card */
-.settings-card {
-    background-color: alpha(@on-surface, 0.05);
-    border: 1px solid alpha(@on-surface, 0.08);
-    border-radius: 16px;
+.settings-title {
+  font-size: 48px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: @on-surface;
 }
 
-/* Section header icon */
-.settings-icon {
-    color: @primary;
+.settings-panel {
+  background-color: alpha(@surface-container-high, 0.4);
+  border: 1px solid alpha(@on-surface, 0.05);
+  border-radius: 16px;
+  padding: 24px;
 }
 
-/* Badge */
-.settings-badge {
-    background-color: alpha(@primary, 0.20);
-    color: @primary;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    padding: 3px 12px;
-    border-radius: 999px;
-    border: 1px solid alpha(@primary, 0.30);
+.settings-section-icon {
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 12px;
+  background-color: alpha(@primary, 0.15);
+  color: @primary;
+
 }
 
-/* Avatar circle */
-.settings-avatar {
-    border-radius: 50%;
-    background-color: @surface-container-high;
-    border: 3px solid @surface-dim;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+.settings-section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: @on-surface;
 }
 
-/* Profile name */
-.settings-profile-name {
-    font-size: 20px;
-    font-weight: 700;
-    color: @on-surface;
+.settings-section-desc {
+  font-size: 14px;
+  color: @on-surface-variant;
 }
 
-/* Outline button */
-.settings-outline-btn {
-    border: 1px solid alpha(@on-surface, 0.12);
-    border-radius: 8px;
-    padding: 8px 16px;
-    color: @on-surface;
+.settings-row {
+  padding: 12px 0;
+  border-bottom: 1px solid alpha(@on-surface, 0.08);
 }
 
-.settings-outline-btn:hover {
-    background-color: alpha(@on-surface, 0.06);
+.settings-row:last-child {
+  border-bottom: none;
 }
 
-/* Action row (chevron list items) */
-.settings-action-row {
-    padding: 12px 16px;
-    border-radius: 8px;
-    transition: background-color 200ms ease;
+.settings-row-label {
+  font-size: 16px;
+  color: @on-surface;
 }
 
-.settings-action-row:hover {
-    background-color: alpha(@on-surface, 0.06);
+.settings-row-desc {
+  font-size: 14px;
+  color: @on-surface-variant;
 }
 
-/* Progress track */
-.settings-progress-track {
-    background-color: alpha(@on-surface, 0.08);
-    border-radius: 4px;
+.settings-toggle {
+  min-width: 52px;
+  min-height: 28px;
+  border-radius: 14px;
+  padding: 2px;
+  background-color: alpha(@on-surface, 0.1);
+  border: 1px solid alpha(@on-surface, 0.2);
+  transition: background-color 200ms ease;
 }
 
-.settings-progress-fill {
-    background-color: @primary;
-    border-radius: 4px;
-    box-shadow: 0 0 10px alpha(@primary, 0.4);
+.settings-toggle:checked {
+  background-color: @primary;
+  border-color: @primary;
 }
 
-/* Segmented control */
-.settings-segmented {
-    background-color: alpha(@on-surface, 0.05);
-    border-radius: 12px;
-    padding: 4px;
-}
-
-.settings-seg-btn {
-    border: none;
-    border-radius: 8px;
-    padding: 8px 16px;
-    color: @on-surface-variant;
-    background: transparent;
-}
-
-.settings-seg-btn:hover {
-    background-color: alpha(@on-surface, 0.06);
-}
-
-.settings-seg-btn.active {
-    background-color: @primary;
-    color: @on-surface;
-    font-weight: 700;
-    box-shadow: 0 2px 8px alpha(@primary, 0.4);
-}
-
-/* Dropdown */
-.settings-dropdown {
-    border: 1px solid alpha(@on-surface, 0.12);
-    border-radius: 12px;
-    padding: 8px 12px;
-    background-color: alpha(@on-surface, 0.05);
-}
-
-/* Toggle row */
-.settings-toggle-row {
-    padding: 4px 0;
-}
-
-/* Slider */
-.settings-scale trough {
-    background-color: alpha(@on-surface, 0.08);
-    border-radius: 4px;
-    min-height: 4px;
-}
-
-.settings-scale highlight {
-    background-color: @primary;
-    border-radius: 4px;
-}
-
-.settings-scale slider {
-    min-width: 16px;
-    min-height: 16px;
-    border-radius: 8px;
-    background-color: @on-surface;
-    border: none;
-}
-
-.settings-scale slider:hover {
-    background-color: @primary;
-    box-shadow: 0 0 10px alpha(@primary, 0.5);
-}
-
-/* Theme option */
-.settings-theme-option {
-    padding: 12px 16px;
-    border-radius: 12px;
-    border: 1px solid alpha(@on-surface, 0.08);
-    transition: background-color 200ms ease, border-color 200ms ease;
-}
-
-.settings-theme-option:hover {
-    background-color: alpha(@on-surface, 0.06);
-}
-
-.settings-theme-option.active {
-    background-color: alpha(@primary, 0.10);
-    border-color: @primary;
-}
-
-/* Color swatch */
 .settings-color-swatch {
-    border-radius: 50%;
-    border: 2px solid transparent;
-    transition: border-color 200ms ease;
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 20px;
+  border: 2px solid transparent;
+  padding: 4px;
+  transition: transform 150ms ease;
 }
 
 .settings-color-swatch:hover {
-    border-color: alpha(@on-surface, 0.3);
+  transform: scale(1.1);
 }
 
 .settings-color-swatch.active {
-    border-color: @on-surface;
-    box-shadow: 0 0 0 3px alpha(@primary, 0.4);
+  border-color: alpha(@primary, 0.5);
+  box-shadow: 0 0 0 3px alpha(@primary, 0.2);
 }
 
-/* Accent text */
-.settings-accent-text {
-    color: @primary;
+.settings-color-inner {
+  border-radius: 16px;
 }
 
-/* Density hint */
-.settings-hint {
-    background-color: alpha(@on-surface, 0.05);
-    border: 1px solid alpha(@on-surface, 0.08);
-    border-radius: 12px;
-    padding: 12px 16px;
-    font-style: italic;
+.settings-theme-option {
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid alpha(@on-surface, 0.05);
+  transition: border-color 200ms ease;
 }
 
-/* Page title */
-.display-lg {
-    font-size: 48px;
-    font-weight: 800;
-    letter-spacing: -0.02em;
-    color: @on-surface;
+.settings-theme-option:hover {
+  border-color: alpha(@primary, 0.3);
 }
 
-/* Headline in cards */
-.headline-md {
-    font-size: 20px;
-    font-weight: 700;
-    color: @on-surface;
+.settings-theme-option.active {
+  border-color: @primary;
 }
 
-/* Body bold (inline labels) */
-.body-bold {
-    font-weight: 700;
-    color: @on-surface;
+.settings-theme-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: @on-surface;
 }
 
-/* Value label (e.g. "6 Seconds") */
-.settings-value {
-    color: @primary;
-    font-weight: 600;
-    font-size: 14px;
+.settings-control {
+  background-color: alpha(@surface-container-high, 0.5);
+  border: 1px solid alpha(@on-surface, 0.1);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+
+.settings-control label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: @on-surface-variant;
+  margin-bottom: 8px;
+
+}
+
+.settings-save-indicator {
+  font-size: 14px;
+  color: @primary;
+  font-weight: 600;
 }

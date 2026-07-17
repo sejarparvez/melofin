@@ -1,18 +1,84 @@
-/* Now Playing view — full content area */
+/* now_playing_view.css — Now Playing View */
+
 .now-playing-art {
-    border-radius: 16px;
-    box-shadow: 0 20px 80px -20px alpha(@primary, 0.5);
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
 }
 
 .now-playing-title {
-    font-size: 32px;
-    font-weight: 800;
-    color: @on-surface;
-    letter-spacing: -0.02em;
+  font-size: 48px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: @on-surface;
+  line-height: 1.1;
 }
 
 .now-playing-artist {
-    font-size: 18px;
-    color: @primary;
-    opacity: 0.9;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: @primary;
+  opacity: 0.8;
+}
+
+.np-lyrics-heading {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: @on-surface-variant;
+  opacity: 0.6;
+}
+
+.np-lyrics-line {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: alpha(@on-surface-variant, 0.4);
+  transition: color 200ms ease;
+}
+
+.np-lyrics-line:hover {
+  color: @on-surface-variant;
+}
+
+.np-lyrics-line.active {
+  color: @on-surface;
+}
+
+.np-lyrics-placeholder {
+  font-size: 16px;
+  color: @on-surface-variant;
+  opacity: 0.6;
+}
+
+.np-quality-badge {
+  background-color: alpha(@on-surface, 0.1);
+  border: 1px solid alpha(@on-surface, 0.1);
+  border-radius: 4px;
+  padding: 4px 8px;
+}
+
+.np-quality-badge span {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+}
+
+.np-heart-btn {
+  border-radius: 999px;
+  padding: 12px;
+  background: transparent;
+  border: none;
+  color: @primary;
+  transition: transform 150ms ease;
+}
+
+.np-heart-btn:hover {
+  transform: scale(1.1);
+}
+
+.np-heart-btn:active {
+  transform: scale(1.25);
 }

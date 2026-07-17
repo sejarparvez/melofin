@@ -1,6 +1,5 @@
-/* Artist Profile / Detail View */
+/* detail.css — Artist Profile / Detail View */
 
-/* Hero section */
 .artist-hero {
     background: linear-gradient(180deg, alpha(@primary, 0.12) 0%, @surface-dim 100%);
     border-radius: 16px;
@@ -40,13 +39,13 @@
     margin-bottom: 24px;
 }
 
-/* Action buttons */
 .play-artist-btn {
     background-color: @primary;
-    color: @on-surface;
+    color: @on-primary;
     border: none;
     border-radius: 999px;
     padding: 12px 24px;
+    font-weight: 600;
 }
 
 .play-artist-btn:hover {
@@ -81,8 +80,6 @@
     background-color: alpha(@on-surface, 0.05);
 }
 
-/* Section headers */
-
 .show-all-link {
     font-size: 12px;
     font-weight: 600;
@@ -97,7 +94,6 @@
     color: @primary;
 }
 
-/* Track table */
 .track-table-header {
     padding: 8px 12px;
     border-bottom: 1px solid alpha(@on-surface, 0.08);
@@ -153,7 +149,6 @@
     color: @outline;
 }
 
-/* About card */
 .about-card {
     background-color: alpha(@primary, 0.08);
     border-radius: 12px;
@@ -177,4 +172,123 @@
 .about-text {
     font-size: 14px;
     color: @on-surface-variant;
+}
+
+.discography-section {
+    margin: 0 32px;
+}
+
+.discography-header {
+    margin-bottom: 16px;
+}
+
+.discography-filter-btn {
+    border: 1px solid alpha(@on-surface, 0.12);
+    border-radius: 999px;
+    padding: 4px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    color: @on-surface-variant;
+    background: transparent;
+    transition: background-color 200ms ease, border-color 200ms ease;
+}
+
+.discography-filter-btn:hover {
+    background-color: alpha(@on-surface, 0.06);
+}
+
+.discography-filter-btn.active {
+    background-color: @primary;
+    color: @on-primary;
+    border-color: @primary;
+}
+
+.discography-card {
+    min-width: 180px;
+    border-radius: 8px;
+    transition: transform 200ms ease;
+}
+
+.discography-card:hover {
+    transform: translateY(-4px);
+}
+
+.discography-art {
+    min-width: 180px;
+    min-height: 180px;
+    border-radius: 8px;
+    background-color: @surface-container-high;
+}
+
+.discography-art-play {
+    min-width: 36px;
+    min-height: 36px;
+    border-radius: 18px;
+    background-color: @primary;
+    color: @on-primary;
+    border: none;
+    padding: 0;
+    opacity: 0;
+    transition: opacity 150ms ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.discography-card:hover .discography-art-play {
+    opacity: 1;
+}
+
+.discography-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: @on-surface;
+    margin-top: 8px;
+}
+
+.discography-meta {
+    font-size: 12px;
+    color: @outline;
+    margin-top: 2px;
+}
+
+.related-artists-section {
+    margin: 32px 32px 0 32px;
+}
+
+.related-artists-header {
+    margin-bottom: 16px;
+}
+
+.related-artist-card {
+    min-width: 140px;
+    padding: 12px;
+    border-radius: 12px;
+    transition: background-color 200ms ease;
+}
+
+.related-artist-card:hover {
+    background-color: alpha(@on-surface, 0.04);
+}
+
+.related-artist-avatar {
+    min-width: 120px;
+    min-height: 120px;
+    border-radius: 50%;
+    background-color: @surface-container-high;
+    border: 2px solid transparent;
+    transition: border-color 200ms ease;
+}
+
+.related-artist-card:hover .related-artist-avatar {
+    border-color: alpha(@primary, 0.4);
+}
+
+.related-artist-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: @on-surface;
+}
+
+.related-artist-subtitle {
+    font-size: 12px;
+    color: @outline;
 }

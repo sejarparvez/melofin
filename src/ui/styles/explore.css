@@ -1,0 +1,172 @@
+/* explore.css — Explore Page */
+
+.explore-title {
+  font-size: 48px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: @on-surface;
+}
+
+.explore-section-header {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: @on-surface;
+  margin-bottom: 8px;
+}
+
+.explore-view-all {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: @primary;
+  background: none;
+  border: none;
+  padding: 4px 8px;
+
+}
+
+/* Trending Artists */
+.explore-artist-card {
+  padding: 12px;
+}
+
+.explore-artist-avatar {
+  min-width: 128px;
+  min-height: 128px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  padding: 4px;
+}
+
+.explore-artist-card:hover .explore-artist-avatar {
+  border-color: @primary;
+}
+
+.explore-artist-name {
+  font-size: 14px;
+  color: @on-surface;
+  margin-top: 12px;
+}
+
+.explore-artist-card:hover .explore-artist-name {
+  color: @primary;
+}
+
+/* Genre Cards */
+.explore-genre-card {
+  border-radius: 12px;
+}
+
+.explore-genre-card-large {
+  min-height: 320px;
+}
+
+.explore-genre-card-small {
+  min-height: 160px;
+}
+
+.explore-genre-gradient {
+  background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.2) 50%, transparent 100%);
+}
+
+.explore-genre-label {
+  font-size: 18px;
+  font-weight: 700;
+  color: white;
+}
+
+.explore-genre-badge {
+  background-color: alpha(@primary, 0.2);
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: @primary;
+
+}
+
+/* Chart Tabs */
+.explore-chart-tab {
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  border: 1px solid transparent;
+  background: transparent;
+  color: @on-surface-variant;
+
+}
+
+.explore-chart-tab.active {
+  background-color: alpha(@primary, 0.15);
+  color: @primary;
+  border-color: alpha(@primary, 0.3);
+}
+
+/* Chart Rows */
+.explore-chart-row {
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.explore-chart-row:hover {
+  background-color: alpha(@on-surface, 0.05);
+}
+
+.explore-chart-number {
+  min-width: 24px;
+  font-size: 24px;
+  font-weight: 700;
+  color: @on-surface-variant;
+}
+
+.explore-chart-row:hover .explore-chart-number {
+  color: @primary;
+}
+
+.explore-chart-art {
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.explore-chart-title {
+  font-size: 16px;
+  color: @on-surface;
+}
+
+.explore-chart-artist {
+  font-size: 14px;
+  color: @on-surface-variant;
+}
+
+.explore-chart-duration {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: @on-surface-variant;
+  min-width: 48px;
+
+}
+
+/* Mood Tags */
+.explore-mood-tag {
+  background: @surface-container;
+  border-radius: 999px;
+  padding: 10px 20px;
+  min-height: 40px;
+}
+
+.explore-mood-tag:hover {
+  background: alpha(@primary, 0.12);
+}
+
+.explore-mood-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: @on-surface;
+}

@@ -4,6 +4,24 @@ use crate::ui::thumbnail_widget;
 use adw::prelude::*;
 use std::rc::Rc;
 
+/// An album in the discography section.
+#[derive(Clone)]
+pub struct DiscographyAlbum {
+    pub title: String,
+    pub year: String,
+    pub album_type: String,
+    pub thumbnail_url: String,
+    pub browse_id: String,
+}
+
+/// A related artist card.
+#[derive(Clone)]
+pub struct RelatedArtist {
+    pub name: String,
+    pub thumbnail_url: String,
+    pub browse_id: String,
+}
+
 pub struct DetailView {
     pub widget: gtk::ScrolledWindow,
 }
@@ -15,6 +33,8 @@ impl DetailView {
         tracks: &[Track],
         on_play_from_list: Rc<dyn Fn(Vec<Track>, usize)>,
         _on_back: Rc<dyn Fn()>,
+        discography: &[DiscographyAlbum],
+        related_artists: &[RelatedArtist],
     ) -> Self {
         let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
         content.set_vexpand(true);
@@ -42,6 +62,18 @@ impl DetailView {
         content_row.append(&right_col);
 
         content.append(&content_row);
+
+        // --- Discography Section ---
+        if !discography.is_empty() {
+            let disco = build_discography_section(discography);
+            content.append(&disco);
+        }
+
+        // --- Related Artists Section ---
+        if !related_artists.is_empty() {
+            let related = build_related_artists_section(related_artists);
+            content.append(&related);
+        }
 
         let widget = gtk::ScrolledWindow::new();
         widget.set_vexpand(true);
@@ -376,4 +408,168 @@ fn build_about_section(metadata: &DetailMetadata) -> gtk::Box {
 
     right_col.append(&card);
     right_col
+}
+
+/// Build the Discography section with horizontally-scrolling album cards.
+fn build_discography_section(albums: &[DiscographyAlbum]) -> gtk::Box {
+    let section = gtk::Box::new(gtk::Orientation::Vertical, 16);
+    section.add_css_class("discography-section");
+
+    // Header with filter tabs
+    let header = gtk::Box::new(gtk::Orientation::Horizontal, 16);
+    header.set_hexpand(true);
+
+    let title = gtk::Label::new(Some("Discography"));
+    title.add_css_class("section-title");
+    title.set_halign(gtk::Align::Start);
+    title.set_hexpand(true);
+
+    let filters = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    filters.add_css_class("discography-filters");
+
+    let albums_btn = gtk::Button::with_label("Albums");
+    albums_btn.add_css_class("discography-filter-btn");
+    albums_btn.add_css_class("active");
+
+    let singles_btn = gtk::Button::with_label("Singles & EPs");
+    singles_btn.add_css_class("discography-filter-btn");
+
+    filters.append(&albums_btn);
+    filters.append(&singles_btn);
+
+    header.append(&title);
+    header.append(&filters);
+    section.append(&header);
+
+    // Horizontal scroll of album cards
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 16);
+    for album in albums {
+        row.append(&discography_card(album));
+    }
+
+    let scroller = gtk::ScrolledWindow::new();
+    scroller.set_vscrollbar_policy(gtk::PolicyType::Never);
+    scroller.set_hscrollbar_policy(gtk::PolicyType::External);
+    scroller.set_child(Some(&row));
+    section.append(&scroller);
+
+    section
+}
+
+/// A single album card in the discography section.
+fn discography_card(album: &DiscographyAlbum) -> gtk::Widget {
+    let card = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    card.add_css_class("discography-card");
+    card.set_size_request(180, -1);
+
+    // Album art with play button overlay
+    let art_overlay = gtk::Overlay::new();
+    art_overlay.set_size_request(180, 180);
+
+    let art_frame = gtk::Frame::new(None);
+    art_frame.add_css_class("discography-art");
+    art_frame.set_size_request(180, 180);
+
+    if !album.thumbnail_url.is_empty() {
+        let picture = gtk::Picture::new();
+        picture.set_content_fit(gtk::ContentFit::Cover);
+        picture.set_size_request(180, 180);
+        art_frame.set_child(Some(&picture));
+        let url = album.thumbnail_url.clone();
+        thumbnail_widget::spawn_fetch(url, 180, move |tex| {
+            picture.set_paintable(Some(&tex));
+        });
+    }
+
+    art_overlay.set_child(Some(&art_frame));
+
+    let play_btn = gtk::Button::from_icon_name("media-playback-start-symbolic");
+    play_btn.add_css_class("discography-art-play");
+    play_btn.set_halign(gtk::Align::End);
+    play_btn.set_valign(gtk::Align::End);
+    art_overlay.add_overlay(&play_btn);
+
+    // Title
+    let title_label = gtk::Label::new(Some(&album.title));
+    title_label.add_css_class("discography-title");
+    title_label.set_halign(gtk::Align::Start);
+    title_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    title_label.set_max_width_chars(22);
+
+    // Year • Type
+    let meta_text = if album.year.is_empty() {
+        album.album_type.clone()
+    } else {
+        format!("{} • {}", album.year, album.album_type)
+    };
+    let meta_label = gtk::Label::new(Some(&meta_text));
+    meta_label.add_css_class("discography-meta");
+    meta_label.set_halign(gtk::Align::Start);
+
+    card.append(&art_overlay);
+    card.append(&title_label);
+    card.append(&meta_label);
+
+    card.upcast()
+}
+
+/// Build the Related Artists section with horizontally-scrolling circular avatars.
+fn build_related_artists_section(artists: &[RelatedArtist]) -> gtk::Box {
+    let section = gtk::Box::new(gtk::Orientation::Vertical, 16);
+    section.add_css_class("related-artists-section");
+
+    // Header
+    let header = gtk::Label::new(Some("Related Artists"));
+    header.add_css_class("section-title");
+    header.set_halign(gtk::Align::Start);
+    header.add_css_class("related-artists-header");
+    section.append(&header);
+
+    // Horizontal scroll of artist cards
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 16);
+    for artist in artists {
+        row.append(&related_artist_card(artist));
+    }
+
+    let scroller = gtk::ScrolledWindow::new();
+    scroller.set_vscrollbar_policy(gtk::PolicyType::Never);
+    scroller.set_hscrollbar_policy(gtk::PolicyType::External);
+    scroller.set_child(Some(&row));
+    section.append(&scroller);
+
+    section
+}
+
+/// A single related artist card with circular avatar.
+fn related_artist_card(artist: &RelatedArtist) -> gtk::Widget {
+    let card = gtk::Box::new(gtk::Orientation::Vertical, 8);
+    card.add_css_class("related-artist-card");
+    card.set_size_request(140, -1);
+    card.set_halign(gtk::Align::Start);
+
+    // Circular avatar
+    let avatar_frame = gtk::Frame::new(None);
+    avatar_frame.add_css_class("related-artist-avatar");
+    avatar_frame.set_size_request(120, 120);
+
+    if !artist.thumbnail_url.is_empty() {
+        let picture = gtk::Picture::new();
+        picture.set_content_fit(gtk::ContentFit::Cover);
+        picture.set_size_request(120, 120);
+        avatar_frame.set_child(Some(&picture));
+        let url = artist.thumbnail_url.clone();
+        thumbnail_widget::spawn_fetch(url, 120, move |tex| {
+            picture.set_paintable(Some(&tex));
+        });
+    }
+
+    let name_label = gtk::Label::new(Some(&artist.name));
+    name_label.add_css_class("related-artist-name");
+    name_label.set_ellipsize(gtk::pango::EllipsizeMode::End);
+    name_label.set_max_width_chars(18);
+
+    card.append(&avatar_frame);
+    card.append(&name_label);
+
+    card.upcast()
 }

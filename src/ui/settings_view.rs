@@ -43,7 +43,7 @@ impl SettingsView {
         title_box.set_margin_start(32);
         title_box.set_margin_end(32);
         let page_title = gtk::Label::new(Some("Settings"));
-        page_title.add_css_class("display-lg");
+        page_title.add_css_class("settings-title");
         page_title.set_halign(gtk::Align::Start);
         let page_subtitle = gtk::Label::new(Some(
             "Manage your account preferences and audio experience.",
@@ -54,7 +54,7 @@ impl SettingsView {
         title_box.append(&page_subtitle);
         content.append(&title_box);
 
-        // Bento grid container
+        // 2-column grid container
         let grid = gtk::Grid::new();
         grid.set_column_spacing(24);
         grid.set_row_spacing(24);
@@ -65,29 +65,29 @@ impl SettingsView {
 
         let profile = UserProfile::load(&data_dir).unwrap_or_else(UserProfile::guest);
 
-        // -- Account (8 cols) ---------------------------------------------------
+        // -- Account (left column, row 0) --
         let account_card = build_account_card(&profile);
-        grid.attach(&account_card, 0, 0, 8, 1);
+        grid.attach(&account_card, 0, 0, 1, 1);
 
-        // -- Storage (4 cols) ---------------------------------------------------
+        // -- Storage (right column, row 0) --
         let storage_card = build_storage_card();
-        grid.attach(&storage_card, 8, 0, 4, 1);
+        grid.attach(&storage_card, 1, 0, 1, 1);
 
-        // -- Audio Quality (6 cols) ---------------------------------------------
+        // -- Audio Quality (left column, row 1) --
         let audio_card = build_audio_quality_card();
-        grid.attach(&audio_card, 0, 1, 6, 1);
+        grid.attach(&audio_card, 0, 1, 1, 1);
 
-        // -- Playback (6 cols) --------------------------------------------------
+        // -- Playback (right column, row 1) --
         let playback_card = build_playback_card();
-        grid.attach(&playback_card, 6, 1, 6, 1);
+        grid.attach(&playback_card, 1, 1, 1, 1);
 
-        // -- Appearance (12 cols) ------------------------------------------------
+        // -- Appearance (full width, row 2) --
         let appearance_card = build_appearance_card();
-        grid.attach(&appearance_card, 0, 2, 12, 1);
+        grid.attach(&appearance_card, 0, 2, 2, 1);
 
         content.append(&grid);
 
-        // -- Logout wiring -------------------------------------------------------
+        // -- Logout wiring --
         {
             let on_logout = std::rc::Rc::new(std::cell::RefCell::new(Some(on_logout)));
             if let Some(btn) = find_button_by_label(grid.upcast_ref(), "Sign Out") {
@@ -109,19 +109,85 @@ impl SettingsView {
 }
 
 // ---------------------------------------------------------------------------
-// Bento cards
+// Glass panel helper
 // ---------------------------------------------------------------------------
 
-fn bento_card() -> gtk::Box {
+fn glass_panel() -> gtk::Box {
     let card = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    card.add_css_class("settings-card");
+    card.add_css_class("settings-panel");
     card
 }
 
+/// Section header row: icon in bg-primary/15 box + title + description
+fn section_header(icon_name: &str, title: &str, desc: &str) -> gtk::Box {
+    let header = gtk::Box::new(gtk::Orientation::Horizontal, 16);
+    header.set_halign(gtk::Align::Start);
+    header.set_margin_bottom(24);
+
+    let icon_box = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    icon_box.add_css_class("settings-section-icon");
+    icon_box.set_size_request(48, 48);
+    icon_box.set_halign(gtk::Align::Start);
+    icon_box.set_valign(gtk::Align::Start);
+    let icon = gtk::Image::from_icon_name(icon_name);
+    icon.set_pixel_size(24);
+    icon.set_halign(gtk::Align::Center);
+    icon.set_valign(gtk::Align::Center);
+    icon_box.append(&icon);
+
+    let text = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    text.set_valign(gtk::Align::Center);
+
+    let title_label = gtk::Label::new(Some(title));
+    title_label.add_css_class("settings-section-title");
+    title_label.set_halign(gtk::Align::Start);
+
+    let desc_label = gtk::Label::new(Some(desc));
+    desc_label.add_css_class("settings-section-desc");
+    desc_label.set_halign(gtk::Align::Start);
+
+    text.append(&title_label);
+    text.append(&desc_label);
+
+    header.append(&icon_box);
+    header.append(&text);
+    header
+}
+
+/// A toggle row with label, description, and switch
+fn toggle_row(title: &str, desc: &str, active: bool) -> gtk::Box {
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    row.add_css_class("settings-row");
+
+    let info = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    info.set_hexpand(true);
+
+    let title_label = gtk::Label::new(Some(title));
+    title_label.add_css_class("settings-row-label");
+    title_label.set_halign(gtk::Align::Start);
+
+    let desc_label = gtk::Label::new(Some(desc));
+    desc_label.add_css_class("settings-row-desc");
+    desc_label.set_halign(gtk::Align::Start);
+
+    info.append(&title_label);
+    info.append(&desc_label);
+
+    let switch = gtk::Switch::new();
+    switch.set_active(active);
+    switch.set_valign(gtk::Align::Center);
+
+    row.append(&info);
+    row.append(&switch);
+    row
+}
+
+// ---------------------------------------------------------------------------
+// Card builders
+// ---------------------------------------------------------------------------
+
 fn build_account_card(profile: &UserProfile) -> gtk::Widget {
-    let card = bento_card();
-    card.set_margin_start(0);
-    card.set_margin_end(0);
+    let card = glass_panel();
 
     let inner = gtk::Box::new(gtk::Orientation::Vertical, 24);
     inner.set_margin_top(24);
@@ -129,31 +195,13 @@ fn build_account_card(profile: &UserProfile) -> gtk::Widget {
     inner.set_margin_start(24);
     inner.set_margin_end(24);
 
-    // Header row: icon + title + badge
-    let header_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    header_row.set_halign(gtk::Align::Start);
-
-    let icon = gtk::Image::from_icon_name("avatar-default-symbolic");
-    icon.set_pixel_size(20);
-    icon.add_css_class("settings-icon");
-    header_row.append(&icon);
-
-    let title = gtk::Label::new(Some("Account"));
-    title.add_css_class("headline-md");
-    header_row.append(&title);
-
-    let badge = gtk::Label::new(Some("ACTIVE"));
-    badge.add_css_class("settings-badge");
-    header_row.append(&badge);
-
-    inner.append(&header_row);
+    inner.append(&section_header("avatar-default-symbolic", "Account", "Manage your account details"));
 
     // Profile row
     let profile_row = gtk::Box::new(gtk::Orientation::Horizontal, 16);
     profile_row.set_halign(gtk::Align::Start);
     profile_row.set_valign(gtk::Align::Center);
 
-    // Avatar circle
     let avatar_frame = gtk::Frame::new(None);
     avatar_frame.add_css_class("settings-avatar");
     avatar_frame.set_size_request(96, 96);
@@ -164,12 +212,11 @@ fn build_account_card(profile: &UserProfile) -> gtk::Widget {
     avatar_frame.set_child(Some(&avatar_icon));
     profile_row.append(&avatar_frame);
 
-    // Name + email
     let info = gtk::Box::new(gtk::Orientation::Vertical, 4);
     info.set_valign(gtk::Align::Center);
 
     let name_label = gtk::Label::new(Some(&profile.name));
-    name_label.add_css_class("settings-profile-name");
+    name_label.add_css_class("settings-section-title");
     name_label.set_halign(gtk::Align::Start);
     info.append(&name_label);
 
@@ -183,13 +230,12 @@ fn build_account_card(profile: &UserProfile) -> gtk::Widget {
     profile_row.append(&info);
     inner.append(&profile_row);
 
-    // Buttons row
+    // Buttons
     let btn_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
     btn_row.set_halign(gtk::Align::End);
 
     let manage_btn = gtk::Button::with_label("Manage Plan");
     manage_btn.add_css_class("flat");
-    manage_btn.add_css_class("settings-outline-btn");
     btn_row.append(&manage_btn);
 
     let signout_btn = gtk::Button::with_label("Sign Out");
@@ -202,7 +248,7 @@ fn build_account_card(profile: &UserProfile) -> gtk::Widget {
 }
 
 fn build_storage_card() -> gtk::Widget {
-    let card = bento_card();
+    let card = glass_panel();
 
     let inner = gtk::Box::new(gtk::Orientation::Vertical, 20);
     inner.set_margin_top(24);
@@ -210,52 +256,39 @@ fn build_storage_card() -> gtk::Widget {
     inner.set_margin_start(24);
     inner.set_margin_end(24);
 
-    // Header
-    let header_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    header_row.set_halign(gtk::Align::Start);
-    let icon = gtk::Image::from_icon_name("drive-harddisk-symbolic");
-    icon.set_pixel_size(20);
-    icon.add_css_class("settings-icon");
-    header_row.append(&icon);
-    let title = gtk::Label::new(Some("Storage"));
-    title.add_css_class("headline-md");
-    header_row.append(&title);
-    inner.append(&header_row);
+    inner.append(&section_header("drive-harddisk-symbolic", "Storage", "Manage your local cache"));
 
-    // Usage bar (placeholder)
+    // Usage bar placeholder
     let usage_box = gtk::Box::new(gtk::Orientation::Vertical, 8);
     let usage_header = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     let used_label = gtk::Label::new(Some("Used: --"));
-    used_label.add_css_class("caption");
     used_label.add_css_class("dim-label");
     used_label.set_hexpand(true);
     let free_label = gtk::Label::new(Some("Free: --"));
-    free_label.add_css_class("caption");
     free_label.add_css_class("dim-label");
     usage_header.append(&used_label);
     usage_header.append(&free_label);
     usage_box.append(&usage_header);
 
     let bar_bg = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    bar_bg.add_css_class("settings-progress-track");
     bar_bg.set_size_request(-1, 8);
+    bar_bg.add_css_class("settings-row");
     let bar_fill = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    bar_fill.add_css_class("settings-progress-fill");
-    bar_fill.set_size_request(0, 8); // placeholder: no data
+    bar_fill.set_size_request(0, 8);
     bar_bg.append(&bar_fill);
     usage_box.append(&bar_bg);
     inner.append(&usage_box);
 
     // Action rows
-    inner.append(&settings_row("Cache Management", "folder-documents-symbolic"));
-    inner.append(&settings_row("Change Location", "folder-open-symbolic"));
+    inner.append(&action_row("Cache Management", "folder-documents-symbolic"));
+    inner.append(&action_row("Change Location", "folder-open-symbolic"));
 
     card.append(&inner);
     card.upcast()
 }
 
 fn build_audio_quality_card() -> gtk::Widget {
-    let card = bento_card();
+    let card = glass_panel();
 
     let inner = gtk::Box::new(gtk::Orientation::Vertical, 24);
     inner.set_margin_top(24);
@@ -263,40 +296,26 @@ fn build_audio_quality_card() -> gtk::Widget {
     inner.set_margin_start(24);
     inner.set_margin_end(24);
 
-    // Header
-    let header_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    header_row.set_halign(gtk::Align::Start);
-    let icon = gtk::Image::from_icon_name("audio-x-generic-symbolic");
-    icon.set_pixel_size(20);
-    icon.add_css_class("settings-icon");
-    header_row.append(&icon);
-    let title = gtk::Label::new(Some("Audio Quality"));
-    title.add_css_class("headline-md");
-    header_row.append(&title);
-    inner.append(&header_row);
+    inner.append(&section_header("audio-x-generic-symbolic", "Audio Quality", "Configure streaming and download quality"));
 
-    // Streaming quality segmented control (placeholder)
+    // Streaming quality segmented control
     let quality_label = gtk::Label::new(Some("STREAMING QUALITY"));
-    quality_label.add_css_class("caption");
     quality_label.add_css_class("dim-label");
     quality_label.set_halign(gtk::Align::Start);
     inner.append(&quality_label);
 
     let seg_box = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    seg_box.add_css_class("settings-segmented");
     for (i, label) in ["Normal", "High", "Extreme"].iter().enumerate() {
         let btn = gtk::Button::with_label(label);
-        btn.add_css_class("settings-seg-btn");
         if i == 2 {
-            btn.add_css_class("active");
+            btn.add_css_class("suggested-action");
         }
         seg_box.append(&btn);
     }
     inner.append(&seg_box);
 
-    // Download quality (placeholder dropdown)
+    // Download quality
     let dl_label = gtk::Label::new(Some("DOWNLOAD QUALITY"));
-    dl_label.add_css_class("caption");
     dl_label.add_css_class("dim-label");
     dl_label.set_halign(gtk::Align::Start);
     inner.append(&dl_label);
@@ -306,35 +325,18 @@ fn build_audio_quality_card() -> gtk::Widget {
         "High (AAC 320kbps)",
         "Standard (AAC 128kbps)",
     ]);
-    combo.add_css_class("settings-dropdown");
     combo.set_selected(0);
     inner.append(&combo);
 
-    // Equalizer toggle (placeholder)
-    let eq_row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    eq_row.add_css_class("settings-toggle-row");
-    let eq_info = gtk::Box::new(gtk::Orientation::Vertical, 2);
-    let eq_title = gtk::Label::new(Some("Equalizer"));
-    eq_title.set_halign(gtk::Align::Start);
-    eq_title.set_hexpand(true);
-    let eq_sub = gtk::Label::new(Some("Custom profile active"));
-    eq_sub.add_css_class("dim-label");
-    eq_sub.set_halign(gtk::Align::Start);
-    eq_info.append(&eq_title);
-    eq_info.append(&eq_sub);
-    eq_row.append(&eq_info);
-    let eq_switch = gtk::Switch::new();
-    eq_switch.set_active(true);
-    eq_switch.set_valign(gtk::Align::Center);
-    eq_row.append(&eq_switch);
-    inner.append(&eq_row);
+    // Equalizer toggle
+    inner.append(&toggle_row("Equalizer", "Custom profile active", true));
 
     card.append(&inner);
     card.upcast()
 }
 
 fn build_playback_card() -> gtk::Widget {
-    let card = bento_card();
+    let card = glass_panel();
 
     let inner = gtk::Box::new(gtk::Orientation::Vertical, 24);
     inner.set_margin_top(24);
@@ -342,81 +344,37 @@ fn build_playback_card() -> gtk::Widget {
     inner.set_margin_start(24);
     inner.set_margin_end(24);
 
-    // Header
-    let header_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    header_row.set_halign(gtk::Align::Start);
-    let icon = gtk::Image::from_icon_name("media-playback-start-symbolic");
-    icon.set_pixel_size(20);
-    icon.add_css_class("settings-icon");
-    header_row.append(&icon);
-    let title = gtk::Label::new(Some("Playback"));
-    title.add_css_class("headline-md");
-    header_row.append(&title);
-    inner.append(&header_row);
+    inner.append(&section_header("media-playback-start-symbolic", "Playback", "Configure playback behavior"));
 
-    // Crossfade slider (placeholder)
+    // Crossfade
     let cf_header = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     let cf_label = gtk::Label::new(Some("Crossfade"));
     cf_label.set_hexpand(true);
     cf_label.set_halign(gtk::Align::Start);
-    cf_label.add_css_class("body-bold");
     cf_header.append(&cf_label);
     let cf_value = gtk::Label::new(Some("6 Seconds"));
-    cf_value.add_css_class("settings-value");
+    cf_value.add_css_class("dim-label");
     cf_header.append(&cf_value);
     inner.append(&cf_header);
 
     let cf_scale = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 12.0, 1.0);
     cf_scale.set_value(6.0);
-    cf_scale.add_css_class("settings-scale");
     inner.append(&cf_scale);
 
-    // Gapless toggle
+    // Gapless
     inner.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
-    let gapless_row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    gapless_row.add_css_class("settings-toggle-row");
-    let gap_info = gtk::Box::new(gtk::Orientation::Vertical, 2);
-    let gap_title = gtk::Label::new(Some("Gapless Playback"));
-    gap_title.set_halign(gtk::Align::Start);
-    gap_title.set_hexpand(true);
-    let gap_sub = gtk::Label::new(Some("Eliminate silence between tracks"));
-    gap_sub.add_css_class("dim-label");
-    gap_sub.set_halign(gtk::Align::Start);
-    gap_info.append(&gap_title);
-    gap_info.append(&gap_sub);
-    gapless_row.append(&gap_info);
-    let gap_switch = gtk::Switch::new();
-    gap_switch.set_active(true);
-    gap_switch.set_valign(gtk::Align::Center);
-    gapless_row.append(&gap_switch);
-    inner.append(&gapless_row);
+    inner.append(&toggle_row("Gapless Playback", "Eliminate silence between tracks", true));
 
-    // Hardware acceleration toggle
+    // Hardware acceleration
     inner.append(&gtk::Separator::new(gtk::Orientation::Horizontal));
-    let hw_row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    hw_row.add_css_class("settings-toggle-row");
-    let hw_info = gtk::Box::new(gtk::Orientation::Vertical, 2);
-    let hw_title = gtk::Label::new(Some("Hardware Acceleration"));
-    hw_title.set_halign(gtk::Align::Start);
-    hw_title.set_hexpand(true);
-    let hw_sub = gtk::Label::new(Some("Offload processing to GPU"));
-    hw_sub.add_css_class("dim-label");
-    hw_sub.set_halign(gtk::Align::Start);
-    hw_info.append(&hw_title);
-    hw_info.append(&hw_sub);
-    hw_row.append(&hw_info);
-    let hw_switch = gtk::Switch::new();
-    hw_switch.set_active(false);
-    hw_switch.set_valign(gtk::Align::Center);
-    hw_row.append(&hw_switch);
-    inner.append(&hw_row);
+    inner.append(&toggle_row("Hardware Acceleration", "Offload processing to GPU", false));
 
     card.append(&inner);
     card.upcast()
 }
 
 fn build_appearance_card() -> gtk::Widget {
-    let card = bento_card();
+    let card = glass_panel();
 
     let inner = gtk::Box::new(gtk::Orientation::Vertical, 24);
     inner.set_margin_top(24);
@@ -424,19 +382,9 @@ fn build_appearance_card() -> gtk::Widget {
     inner.set_margin_start(24);
     inner.set_margin_end(24);
 
-    // Header
-    let header_row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    header_row.set_halign(gtk::Align::Start);
-    let icon = gtk::Image::from_icon_name("preferences-desktop-theme-symbolic");
-    icon.set_pixel_size(20);
-    icon.add_css_class("settings-icon");
-    header_row.append(&icon);
-    let title = gtk::Label::new(Some("Appearance"));
-    title.add_css_class("headline-md");
-    header_row.append(&title);
-    inner.append(&header_row);
+    inner.append(&section_header("preferences-desktop-theme-symbolic", "Appearance", "Customize the look and feel"));
 
-    // Three-column grid
+    // Three-column layout
     let cols = gtk::Box::new(gtk::Orientation::Horizontal, 48);
     cols.set_halign(gtk::Align::Fill);
 
@@ -445,7 +393,6 @@ fn build_appearance_card() -> gtk::Widget {
     theme_col.set_hexpand(true);
 
     let theme_label = gtk::Label::new(Some("THEME MODE"));
-    theme_label.add_css_class("caption");
     theme_label.add_css_class("dim-label");
     theme_label.set_halign(gtk::Align::Start);
     theme_col.append(&theme_label);
@@ -481,7 +428,6 @@ fn build_appearance_card() -> gtk::Widget {
     accent_col.set_hexpand(true);
 
     let accent_label = gtk::Label::new(Some("ACCENT COLOR"));
-    accent_label.add_css_class("caption");
     accent_label.add_css_class("dim-label");
     accent_label.set_halign(gtk::Align::Start);
     accent_col.append(&accent_label);
@@ -498,11 +444,10 @@ fn build_appearance_card() -> gtk::Widget {
         ("settings-color-4", "#4cd6ff"),
         ("settings-color-5", "#b7eaff"),
     ];
-    // Build a single CSS provider for all swatch colors
     {
         let rules: String = colors
             .iter()
-            .map(|(cls, hex)| format!(".{cls} {{ background-color: {hex}; }}"))
+            .map(|(cls, hex)| format!(".{cls} {{ background-color: {hex}; border-radius: 20px; }}"))
             .collect::<Vec<_>>()
             .join("\n");
         let provider = gtk::CssProvider::new();
@@ -515,7 +460,7 @@ fn build_appearance_card() -> gtk::Widget {
     }
     for (i, (cls, _hex)) in colors.iter().enumerate() {
         let swatch = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        swatch.set_size_request(36, 36);
+        swatch.set_size_request(40, 40);
         swatch.add_css_class("settings-color-swatch");
         swatch.add_css_class(cls);
         if i == 0 {
@@ -531,23 +476,20 @@ fn build_appearance_card() -> gtk::Widget {
     density_col.set_hexpand(true);
 
     let density_label = gtk::Label::new(Some("INTERFACE DENSITY"));
-    density_label.add_css_class("caption");
     density_label.add_css_class("dim-label");
     density_label.set_halign(gtk::Align::Start);
     density_col.append(&density_label);
 
     let density_header = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     let compact = gtk::Label::new(Some("Compact"));
-    compact.add_css_class("caption");
+    compact.add_css_class("dim-label");
     compact.set_hexpand(true);
     let comfortable = gtk::Label::new(Some("Comfortable"));
-    comfortable.add_css_class("caption");
-    comfortable.add_css_class("body-bold");
-    comfortable.add_css_class("settings-accent-text");
+    comfortable.add_css_class("dim-label");
     comfortable.set_hexpand(true);
     comfortable.set_halign(gtk::Align::Center);
     let spacious = gtk::Label::new(Some("Spacious"));
-    spacious.add_css_class("caption");
+    spacious.add_css_class("dim-label");
     spacious.set_hexpand(true);
     spacious.set_halign(gtk::Align::End);
     density_header.append(&compact);
@@ -557,18 +499,15 @@ fn build_appearance_card() -> gtk::Widget {
 
     let density_scale = gtk::Scale::with_range(gtk::Orientation::Horizontal, 0.0, 100.0, 1.0);
     density_scale.set_value(50.0);
-    density_scale.add_css_class("settings-scale");
     density_col.append(&density_scale);
 
     let hint = gtk::Label::new(Some(
         "\"This changes the spacing and font sizes across the application.\"",
     ));
     hint.add_css_class("dim-label");
-    hint.add_css_class("caption");
     hint.set_wrap(true);
     hint.set_halign(gtk::Align::Center);
     hint.set_margin_top(8);
-    hint.set_css_classes(&["dim-label", "caption", "settings-hint"]);
     density_col.append(&hint);
 
     cols.append(&density_col);
@@ -582,9 +521,9 @@ fn build_appearance_card() -> gtk::Widget {
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn settings_row(label: &str, _icon: &str) -> gtk::Widget {
+fn action_row(label: &str, _icon: &str) -> gtk::Widget {
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    row.add_css_class("settings-action-row");
+    row.add_css_class("settings-row");
 
     let lbl = gtk::Label::new(Some(label));
     lbl.set_hexpand(true);
@@ -600,7 +539,6 @@ fn settings_row(label: &str, _icon: &str) -> gtk::Widget {
 }
 
 fn find_button_by_label(widget: &gtk::Widget, label: &str) -> Option<gtk::Button> {
-    // Check if this widget is a Button with matching label
     if let Ok(btn) = widget.clone().downcast::<gtk::Button>() {
         if let Some(child) = btn.child() {
             if let Ok(lbl) = child.downcast::<gtk::Label>() {
@@ -610,7 +548,6 @@ fn find_button_by_label(widget: &gtk::Widget, label: &str) -> Option<gtk::Button
             }
         }
     }
-    // Recurse into children
     let mut child = widget.first_child();
     while let Some(c) = child {
         if let Some(btn) = find_button_by_label(&c, label) {

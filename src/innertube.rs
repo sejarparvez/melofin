@@ -75,7 +75,7 @@ pub(crate) fn browse_section(
     let initial = match browse_request(cookie_header, api_key, Some(browse_id), None) {
         Ok(json) => json,
         Err(e) => {
-            tracing::warn!("browse_section({browse_id}) initial request failed: {e}");
+            tracing::warn!("browse_section({browse_id}) initial request failed: {e:#}");
             return Vec::new();
         }
     };
@@ -257,6 +257,12 @@ pub(crate) fn browse_request(
                     last_err = Some(anyhow::anyhow!("HTTP {status}"));
                     continue;
                 }
+                if (400..500).contains(&status) {
+                    let body = response.into_string().unwrap_or_default();
+                    let snippet = if body.len() > 200 { &body[..200] } else { &body };
+                    return Err(anyhow::anyhow!("HTTP {status}: {snippet}"))
+                        .context("browse endpoint request failed");
+                }
                 let text = response
                     .into_string()
                     .context("couldn't read browse response body")?;
@@ -277,6 +283,7 @@ pub(crate) fn browse_request(
     }
 
     Err(last_err.unwrap_or_else(|| anyhow::anyhow!("browse request failed after retries")))
+        .context("browse endpoint request failed")
 }
 
 /// Searches YouTube Music for an artist by name and returns their UC-prefixed

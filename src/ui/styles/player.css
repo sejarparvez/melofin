@@ -1,43 +1,51 @@
-/* Player bar */
+/* player.css — Bottom player bar */
+/* Matches Stitch: glass panel, play button bg-on-surface, progress bar 4px→8px */
+
 .player-bar {
-    background-color: @surface-container;
-    border-top: 1px solid alpha(@on-surface, 0.08);
+    background-color: alpha(@surface-container, 0.9);
+    border-top: 1px solid alpha(@on-surface, 0.1);
     padding: 0;
     min-height: 96px;
 }
 
-/* Transport buttons - simple icons, no borders */
+/* Transport buttons — icons only, no bg */
 .transport-button {
     min-width: 32px;
     min-height: 32px;
     border-radius: 16px;
     border: none;
     background: transparent;
-    color: @on-surface;
+    color: @on-surface-variant;
     padding: 0;
+    transition: color 200ms ease;
 }
 
 .transport-button:hover {
-    background: alpha(@on-surface, 0.08);
+    color: @on-surface;
 }
 
 .transport-button:disabled {
     opacity: 0.3;
 }
 
-/* Play/Pause button - slightly larger but still simple */
+/* Play/Pause button — 40px circle, dark bg, light text */
 .play-button {
     min-width: 40px;
     min-height: 40px;
     border-radius: 20px;
     border: none;
-    background: transparent;
-    color: @on-surface;
+    background: @on-surface;
+    color: @surface-dim;
     padding: 0;
+    transition: transform 150ms ease, opacity 150ms ease;
 }
 
 .play-button:hover {
-    background: alpha(@on-surface, 0.08);
+    transform: scale(1.05);
+}
+
+.play-button:active {
+    transform: scale(0.95);
 }
 
 /* Heart/Like button */
@@ -47,27 +55,29 @@
     border-radius: 14px;
     border: none;
     background: transparent;
-    color: @outline;
+    color: @on-surface-variant;
     padding: 0;
+    transition: color 200ms ease;
 }
 
 .heart-button:hover {
-    color: @on-surface;
+    color: @primary;
 }
 
 .heart-button.liked {
     color: @primary;
 }
 
-/* Progress bar - thin track */
+/* Progress bar — 4px track, 8px on hover, no thumb by default */
 scale.progress-bar trough {
-    min-height: 3px;
-    background-color: alpha(@on-surface, 0.15);
+    min-height: 4px;
+    background-color: alpha(@on-surface, 0.1);
     border-radius: 2px;
+    transition: min-height 150ms ease;
 }
 
 scale.progress-bar trough:hover {
-    min-height: 5px;
+    min-height: 8px;
 }
 
 scale.progress-bar highlight {
@@ -76,61 +86,90 @@ scale.progress-bar highlight {
 }
 
 scale.progress-bar slider {
-    min-width: 12px;
-    min-height: 12px;
-    border-radius: 6px;
+    min-width: 0;
+    min-height: 0;
+    border-radius: 50%;
     background-color: @on-surface;
     border: none;
-    margin: -4px;
+    margin: 0;
+    opacity: 0;
+    transition: opacity 150ms ease, min-width 150ms ease, min-height 150ms ease;
 }
 
-scale.progress-bar slider:hover {
-    background-color: @primary;
+scale.progress-bar trough:hover > slider {
+    min-width: 14px;
+    min-height: 14px;
+    opacity: 1;
 }
 
-/* Volume slider */
+/* Volume slider — matches progress bar */
 scale.volume-scale trough {
-    min-height: 3px;
-    background-color: alpha(@on-surface, 0.15);
+    min-height: 4px;
+    background-color: alpha(@on-surface, 0.1);
     border-radius: 2px;
+    transition: min-height 150ms ease;
+}
+
+scale.volume-scale trough:hover {
+    min-height: 8px;
 }
 
 scale.volume-scale highlight {
-    background-color: @on-surface;
+    background-color: @on-surface-variant;
     border-radius: 2px;
 }
 
-/* Fullscreen button */
+scale.volume-scale slider {
+    min-width: 0;
+    min-height: 0;
+    border-radius: 50%;
+    background-color: @on-surface;
+    border: none;
+    margin: 0;
+    opacity: 0;
+    transition: opacity 150ms ease, min-width 150ms ease, min-height 150ms ease;
+}
+
+scale.volume-scale trough:hover > slider {
+    min-width: 14px;
+    min-height: 14px;
+    opacity: 1;
+}
+
+/* Generic icon button (fullscreen, queue, lyrics) */
 .icon-button {
     min-width: 28px;
     min-height: 28px;
     border-radius: 14px;
     border: none;
     background: transparent;
-    color: @outline;
+    color: @on-surface-variant;
     padding: 0;
+    transition: color 200ms ease;
 }
 
 .icon-button:hover {
     color: @on-surface;
-    background: alpha(@on-surface, 0.08);
 }
 
-/* Track info */
+/* Track info labels */
 .track-title {
-    font-size: 14px;
-    font-weight: 600;
+    font-size: 16px;
+    font-weight: 700;
     color: @on-surface;
 }
 
 .track-artist {
-    font-size: 12px;
-    color: @outline;
+    font-size: 14px;
+    color: @on-surface-variant;
 }
 
-/* Time labels */
+/* Time labels — Geist font, 10px */
 .time-label {
-    font-size: 11px;
-    color: @outline;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: @on-surface-variant;
     min-width: 36px;
+
 }

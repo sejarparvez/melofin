@@ -1,4 +1,5 @@
-/* Greeting */
+/* home.css — Home / Library view */
+
 .greeting-text {
     font-size: 48px;
     font-weight: 800;
@@ -12,21 +13,35 @@
     margin-top: 4px;
 }
 
-/* Section headers */
 .section-title {
     font-size: 24px;
     font-weight: 700;
+    letter-spacing: -0.01em;
     color: @on-surface;
 }
 
-/* Navigation arrows */
+.section-header {
+    margin-bottom: 8px;
+}
+
+.section-header-link {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: @primary;
+    background: none;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
 .nav-arrow {
     min-width: 32px;
     min-height: 32px;
-    border-radius: 16px;
+    border-radius: 999px;
     border: 1px solid alpha(@on-surface, 0.1);
     background: alpha(@on-surface, 0.05);
-    color: @on-surface;
+    color: @on-surface-variant;
     padding: 0;
 }
 
@@ -44,22 +59,28 @@
 .album-card {
     padding: 0;
     border-radius: 12px;
-    transition: transform 200ms ease, background-color 200ms ease;
+    transition: transform 300ms ease, box-shadow 300ms ease;
 }
 
 .album-card:hover {
     transform: translateY(-4px);
-    background-color: alpha(@on-surface, 0.06);
+    box-shadow: 0 10px 40px -10px alpha(@primary, 0.3);
 }
 
 .album-art {
     background-color: @surface-container-high;
     border-radius: 12px;
+    transition: transform 300ms ease, filter 300ms ease;
+}
+
+.album-card:hover .album-art {
+    transform: scale(1.05);
+    filter: brightness(1.1);
 }
 
 .album-title {
     font-size: 16px;
-    font-weight: 600;
+    font-weight: 700;
     color: @on-surface;
     margin-top: 12px;
 }
@@ -70,36 +91,51 @@
     margin-top: 4px;
 }
 
-/* Category cards (For You section) */
-.category-card {
-    border: 1px solid alpha(@on-surface, 0.1);
+/* Card hover play overlay */
+.album-art-overlay {
+    background-color: alpha(@surface-dim, 0.4);
     border-radius: 12px;
-    padding: 16px;
-    transition: background-color 200ms ease;
+    opacity: 0;
+    transition: opacity 300ms ease;
+}
+
+.album-card:hover .album-art-overlay {
+    opacity: 1;
+}
+
+/* Category cards */
+.category-card {
+    background-color: alpha(@surface-container-high, 0.4);
+    border: 1px solid alpha(@on-surface, 0.05);
+    border-radius: 16px;
+    padding: 24px;
+    transition: background-color 300ms ease;
 }
 
 .category-card:hover {
-    background-color: alpha(@on-surface, 0.06);
+    background-color: alpha(@surface-container-high, 0.6);
 }
 
 .category-art {
-    min-width: 80px;
-    min-height: 80px;
+    min-width: 96px;
+    min-height: 96px;
     border-radius: 8px;
     background-color: @surface-container-high;
+
 }
 
 .category-label {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: @primary;
+
 }
 
 .category-title {
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 18px;
+    font-weight: 700;
     color: @on-surface;
 }
 
@@ -108,7 +144,97 @@
     color: @on-surface-variant;
 }
 
-/* Home card (legacy, kept for compatibility) */
+/* Numbered track list */
+.numbered-track-row {
+    padding: 12px 16px;
+    border-radius: 12px;
+    transition: background-color 200ms ease;
+}
+
+.numbered-track-row:hover {
+    background-color: alpha(@on-surface, 0.05);
+}
+
+.numbered-track-number {
+    min-width: 32px;
+    font-size: 16px;
+    font-weight: 700;
+    color: @on-surface-variant;
+
+}
+
+.numbered-track-art {
+    min-width: 48px;
+    min-height: 48px;
+    border-radius: 8px;
+    background-color: @surface-container-high;
+}
+
+.numbered-track-info {
+    min-width: 0;
+}
+
+.numbered-track-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: @on-surface;
+}
+
+.numbered-track-artist {
+    font-size: 14px;
+    color: @on-surface-variant;
+}
+
+.numbered-track-album {
+    font-size: 14px;
+    color: @on-surface-variant;
+    min-width: 120px;
+}
+
+.numbered-track-duration {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: @on-surface-variant;
+    min-width: 48px;
+
+}
+
+.numbered-track-play {
+    min-width: 28px;
+    min-height: 28px;
+    border-radius: 14px;
+    border: none;
+    background: transparent;
+    color: @on-surface;
+    padding: 0;
+    opacity: 0;
+    transition: opacity 150ms ease;
+}
+
+.numbered-track-row:hover .numbered-track-number {
+    opacity: 0;
+}
+
+.numbered-track-row:hover .numbered-track-play {
+    opacity: 1;
+}
+
+.numbered-list-header {
+    padding: 4px 16px 8px 16px;
+    border-bottom: 1px solid alpha(@on-surface, 0.08);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: @on-surface-variant;
+
+}
+
+.hero-card {
+    background: @primary-container;
+    border-radius: 16px;
+}
+
 .home-art {
     background-color: @surface-container-high;
     border-radius: 12px;
@@ -117,20 +243,14 @@
 .home-card {
     padding: 8px;
     border-radius: 12px;
-    transition: transform 200ms ease, background-color 200ms ease;
+    transition: transform 300ms ease, box-shadow 300ms ease;
 }
 
 .home-card:hover {
-    background-color: alpha(@primary, 0.08);
-    transform: translateY(-2px);
+    transform: translateY(-4px);
+    box-shadow: 0 10px 40px -10px alpha(@primary, 0.3);
 }
 
 .home-card:hover .home-art {
-    background-color: alpha(@primary, 0.15);
     box-shadow: 0 4px 20px alpha(@primary, 0.3);
-}
-
-.hero-card {
-    background: @primary;
-    border-radius: 16px;
 }

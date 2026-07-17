@@ -1,15 +1,36 @@
+/* top_bar.css — Navigation bar at the top */
+/* Matches Stitch: glass panel, search bar with rounded-xl radius */
+
 .top-bar {
-    background-color: @surface-dim;
+    background-color: alpha(@surface-dim, 0.8);
+    border-bottom: 1px solid alpha(@on-surface, 0.05);
 }
 
+/* Search bar — rounded-xl (12px), not pill */
 .top-bar-search {
-    background-color: alpha(@on-surface, 0.05);
-    border-radius: 999px;
-    min-height: 36px;
-    padding-left: 12px;
-    padding-right: 12px;
+    background-color: @surface-container-high;
+    border-radius: 12px;
+    min-height: 44px;
+    padding-left: 16px;
+    padding-right: 16px;
+    transition: background-color 200ms ease, box-shadow 200ms ease;
 }
 
 .top-bar-search:focus-within {
-    background-color: alpha(@primary, 0.12);
+    box-shadow: 0 0 0 2px alpha(@primary, 0.3);
+}
+
+/* Back/Forward buttons — circular with subtle bg */
+.top-bar-nav-btn {
+    border-radius: 999px;
+    padding: 8px;
+    background-color: alpha(@on-surface, 0.05);
+    border: 1px solid alpha(@on-surface, 0.1);
+    color: @on-surface-variant;
+    transition: background-color 200ms ease, color 200ms ease;
+}
+
+.top-bar-nav-btn:hover {
+    background-color: alpha(@on-surface, 0.1);
+    color: @on-surface;
 }
